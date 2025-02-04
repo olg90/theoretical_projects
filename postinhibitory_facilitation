@@ -7,115 +7,135 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 
-def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t):
-
-    nlist=[]
-    vlist=[]
-    vthlist=[]
-    wlist=[]
-    tlist=[]
-    prelist=[]
-    postlist=[]
-    postvth=[]
+def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs):
     
-    tcurr=0
-    ratio = 0
-    timer = delta_t
-    while tcurr < tmax:
-        t0=exponential(1/f) # action potential
-        t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
-        t2=exponential(1/fi)
-        t3 = timer
-
-        if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
-            b = binomial(n, pr)
-            n-=b
-            v=v+c*b
-            tmin = t0
-            timer-=tmin
-            prelist.append(tcurr+tmin)
-
-        elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
-            n+=1
-            tmin = t1
-            timer-=tmin
-
-        elif t2<t0 and t2<t1 and t2<t3: # add a docked vesicle
-            v=v0
-            w=w0
-            tmin=t2
-            timer-=tmin
-
-        else:
-            tmin=t3
-            timer = delta_t
-            if tcurr >= ratio*tmax:
-                nlist.append(n)
-                vlist.append(v)
-                vthlist.append(vth)
-                wlist.append(w)
-                tlist.append(tcurr)
-                
-        tcurr += tmin
-        if v>=vth:
-            postlist.append(tcurr)
-            postvth.append(vth)
-            v=0
-            
-        # Update the continuous dynamics
-
-        v += (-v / tauv) * tmin
-        vth += ((vb-vth) / tauvth - kw * w) * tmin
-        w += (-w/tauw)*tmin
-
-    Tlist = np.diff(postlist)
-    Tmean = np.mean(Tlist)
-    CVT2=np.var(Tlist)/Tmean**2
-    FFn=np.var(nlist)/np.mean(nlist)
-    FFv=np.var(vlist)/np.mean(vlist)
-    return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
+    tavgs=[]
+    cavgs=[]
+    
+    for _ in range(navgs):
+    
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        wlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        postvth=[]
         
-# =============================================================================
+        tcurr=0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2=exponential(1/fi)
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr)
+                n-=b
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+    
+            elif t2<t0 and t2<t1 and t2<t3: # add a docked vesicle
+                v=v0
+                w=w0
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    wlist.append(w)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                postvth.append(vth)
+                v=0
+                
+            # Update the continuous dynamics
+    
+            v += (-v / tauv) * tmin
+            vth += ((vb-vth) / tauvth - kw * w) * tmin
+            w += (-w/tauw)*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
 
+        
+
+# =============================================================================
+#%% Test 1: Plotting simulations
 f=100
+fi=20
 pr=0.2
 M=100
 k=10
 tauv=0.1
 tauvth=0.1
-cz=1 # num nt per ap
 
-n=0 # occupied states
-v=0
-w=0
-
-kvz=10 # nt effect on v
-kthz=1 # nt effect on vth
-gz=100 # nt decay rate
 vb=0.2
 vth=vb
 
 w0=0.1
 kw=1
-fi=1
+
 v0=-0.1
 
-c=0.01
-
+c=0.001
 tauw=1
 
+n=0 # occupied states
+v=0
+w=0
+
 delta_t = 0.001
-tmax = 100 # <-------------- TMAX
+tmax = 10 # <-------------- TMAX
+navgs=1
 
-vthss=vb - (fi*kw*tauvth*tauw*w0)/(1 + fi*tauw)
+res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
 
-res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t)
-plt.plot(res[0], res[2])
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
+
+vtheq=vb - (fi*kw*tauvth*tauw*w0)/(1 + fi*tauw)
+veq=(tauv*(c*f*k*M*pr + fi*(k + f*pr)*v0))/((k + f*pr)*(1 + fi*tauv))
+
+vthsim=np.mean(res[4])*np.ones(len(res[0]))
+vsim=np.mean(res[2])*np.ones(len(res[0]))
+
+plt.plot(res[0], res[2], label='v')
 plt.plot(res[0], res[4], color='k')
-plt.plot(res[0], vthss*np.ones(len(res[0])))
-plt.plot(res[0], np.mean(res[4])*np.ones(len(res[0])))
-#%%  Inhibition
-f=200
+plt.plot(res[0], vtheq*np.ones(len(res[0])), label='vtheq')
+plt.plot(res[0], vthsim, label='vthsim')
+plt.plot(res[0], veq*np.ones(len(res[0])), label='veq')
+plt.plot(res[0], vsim, label='vsim')
+plt.legend()
+#%%  Test 2 - firing rate eq vs sim
+f=100
 pr=0.1
 M=100
 k=10
@@ -137,12 +157,16 @@ w=0
 
 delta_t = 0.001
 tmax = 10 # <-------------- TMAX
+navgs=1
+
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
 
 filist=np.linspace(0,20,100)
 ftlist=[]
 for i,fi in enumerate(filist):
     print(i/len(filist))
-    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t)
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
     ftlist.append(res[7])
 
 def tmean(fi):
@@ -155,6 +179,129 @@ plt.scatter(filist,tsim, label='simulations', color='blue')
 plt.ylabel('Postsynaptic firing rate')
 plt.xlabel('Inhibitory neuron frequency')
 plt.plot(filist, teq, label='theoretical', color='k', linewidth=3)
+# =============================================================================
+# plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
+# =============================================================================
+plt.legend()
+#%% Test 3 - Noise - FT LIST IS NOISE - sweeping inhibition
+f=200
+pr=0.1
+M=100
+k=10
+tauv=1
+c=0.01
+
+vb=0.2
+vth=vb
+tauvth=1
+
+w0=0.1
+kw=1
+v0=-0.1
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 30 # <-------------- TMAX
+navgs=1
+
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
+
+filist=np.linspace(0,100,100)
+ftlist=[] # NOISE NOW
+for i,fi in enumerate(filist):
+    print(i/len(filist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[8])
+
+plt.scatter(filist,ftlist, label='simulations', color='blue')
+plt.ylabel('Coefficient of variation squared')
+plt.xlabel('Inhibitory neuron frequency')
+# =============================================================================
+# plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
+# =============================================================================
+plt.legend()
+#%%  Test 4 - Noise - FT LIST IS NOISE - sweeping excitation
+fi=10
+pr=0.1
+M=100
+k=10
+tauv=1
+c=0.01
+
+vb=0.2
+vth=vb
+tauvth=1
+
+w0=0.1
+kw=1
+v0=-0.1
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 100 # <-------------- TMAX
+navgs=10
+
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
+
+flist=np.linspace(0,40,100)
+ftlist=[] # NOISE NOW
+for i,f in enumerate(flist):
+    print(i/len(flist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[8])
+
+plt.scatter(flist,ftlist, label='simulations', color='blue')
+plt.ylabel('Coefficient of variation squared')
+plt.xlabel('Excitatory neuron frequency')
+# =============================================================================
+# plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
+# =============================================================================
+plt.legend()
+#%%  Test 5 - Noise - sweeping excitation WIP
+fi=10
+pr=0.1
+M=100
+k=10
+tauv=1
+c=0.01
+
+vb=0.2
+vth=vb
+tauvth=1
+
+w0=0.1
+kw=1
+v0=-0.1
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 10 # <-------------- TMAX
+navgs=1
+
+flist=np.linspace(0,100,100)
+ftlist=[] # NOISE NOW
+for i,f in enumerate(flist):
+    print(i/len(flist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[8])
+
+plt.scatter(flist,ftlist, label='simulations', color='blue')
+plt.ylabel('Coefficient of variation squared')
+plt.xlabel('Excitatory neuron frequency')
 # =============================================================================
 # plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
 # =============================================================================
