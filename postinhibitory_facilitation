@@ -272,7 +272,6 @@ plt.legend()
 pr=0.1
 M=100
 k=10
-
 c=0.01
 
 vb=0.2
@@ -307,16 +306,17 @@ fi = getfi(tauvth, tauv)
 def tmean2(f):
     return (tauv*np.log((tauv*(c*f*k*M*pr*(1 + fi*tauw) + fi*(k + f*pr)*(v0 + fi*tauw*v0 + kw*tauw*w0)))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauv*tauw*w0))))/(1 + fi*tauv)
 
-
 flist=np.linspace(0,100,100)
-ftlist=[] 
-for i,f in enumerate(flist):
-    print(i/len(flist))
-    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
-    ftlist.append(res[8])
-
-plt.scatter(flist,ftlist, label='simulations', color='blue')
-plt.plot(flist, tmean2())
+# =============================================================================
+# ftlist=[] 
+# for i,f in enumerate(flist):
+#     print(i/len(flist))
+#     res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+#     ftlist.append(res[8])
+# 
+# plt.scatter(flist,ftlist, label='simulations', color='blue')
+# =============================================================================
+plt.plot(flist, tmean2(flist))
 plt.ylabel('Coefficient of variation squared')
 plt.xlabel('Excitatory neuron frequency')
 plt.legend()
