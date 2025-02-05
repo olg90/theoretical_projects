@@ -85,8 +85,6 @@ def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauv
     CVT2 = np.mean(cavgs)
     return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
 
-        
-
 # =============================================================================
 #%% Test 1: Plotting simulations
 f=100
@@ -105,7 +103,7 @@ kw=1
 
 v0=-0.1
 
-c=0.001
+c=0.003
 tauw=1
 
 n=0 # occupied states
@@ -113,7 +111,7 @@ v=0
 w=0
 
 delta_t = 0.001
-tmax = 10 # <-------------- TMAX
+tmax = 100 # <-------------- TMAX
 navgs=1
 
 res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
@@ -135,6 +133,7 @@ plt.plot(res[0], veq*np.ones(len(res[0])), label='veq')
 plt.plot(res[0], vsim, label='vsim')
 plt.legend()
 #%%  Test 2 - firing rate eq vs sim
+# Results for bandpass effects
 f=100
 pr=0.1
 M=100
@@ -172,13 +171,113 @@ for i,fi in enumerate(filist):
 def tmean(fi):
     return (tauv*np.log((tauv*(1 + fi*tauw)*(c*f*k*M*pr + fi*(k + f*pr)*v0))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauvth*(1 + fi*tauv)*tauw*w0))))/(1 + fi*tauv)
     
+teq=tmean(np.array(filist))
+tsim=np.array(ftlist)
+
+plt.scatter(filist, 1/tsim, label='simulations', color='blue')
+plt.ylabel('Postsynaptic firing rate')
+plt.xlabel('Inhibitory neuron frequency')
+plt.plot(filist, 1/teq, label='theoretical', color='k', linewidth=3)
+# =============================================================================
+# plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
+# =============================================================================
+plt.legend()
+#%%  Test 2.1 - firing rate eq vs sim, TESTS
+f=100
+pr=0.2
+M=100
+k=10
+tauv=0.1
+tauvth=0.1
+
+vb=0.2
+vth=vb
+
+w0=0.1
+kw=1
+
+v0=-0.1
+
+c=0.01
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 10 # <-------------- TMAX
+navgs=1
+
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
+
+filist=np.linspace(0,20,100)
+ftlist=[]
+for i,fi in enumerate(filist):
+    print(i/len(filist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[7])
+
+def tmean(fi):
+    return (tauv*np.log((tauv*(1 + fi*tauw)*(c*f*k*M*pr + fi*(k + f*pr)*v0))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauvth*(1 + fi*tauv)*tauw*w0))))/(1 + fi*tauv)
+    
 teq=1/tmean(np.array(filist))
 tsim=1/np.array(ftlist)
 
-plt.scatter(filist,tsim, label='simulations', color='blue')
+plt.scatter(filist, tsim, label='simulations', color='blue')
 plt.ylabel('Postsynaptic firing rate')
 plt.xlabel('Inhibitory neuron frequency')
 plt.plot(filist, teq, label='theoretical', color='k', linewidth=3)
+# =============================================================================
+# plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
+# =============================================================================
+plt.legend()
+#%%  Test 2.2 - firing rate eq vs sim for sweeping excitation
+fi=1
+pr=0.2
+M=100
+k=10
+tauv=1
+c=0.01
+
+vb=0.2
+vth=vb
+tauvth=1
+
+w0=0.1
+kw=1
+v0=-0.1
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 10 # <-------------- TMAX
+navgs=1
+
+check = tauvth + fi*tauvth*tauw>tauw
+print(check)
+
+flist=np.linspace(0,100,100)
+ftlist=[]
+for i,f in enumerate(filist):
+    print(i/len(filist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[7])
+
+def tmean(f):
+    return (tauv*np.log((tauv*(1 + fi*tauw)*(c*f*k*M*pr + fi*(k + f*pr)*v0))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauvth*(1 + fi*tauv)*tauw*w0))))/(1 + fi*tauv)
+    
+teq=tmean(np.array(flist))
+tsim=np.array(ftlist)
+
+plt.scatter(flist,1/tsim, label='simulations', color='blue')
+plt.ylabel('Postsynaptic firing rate')
+plt.xlabel('Excitatory neuron frequency')
+plt.plot(flist, 1/teq, label='theoretical', color='k', linewidth=3)
 # =============================================================================
 # plt.title('mse={}'.format(np.around(np.mean((teq-tsim)**2), 3)))
 # =============================================================================
@@ -247,18 +346,23 @@ v=0
 w=0
 
 delta_t = 0.001
-tmax = 100 # <-------------- TMAX
-navgs=10
+tmax = 1 # <-------------- TMAX
+navgs = 10
 
 check = tauvth + fi*tauvth*tauw>tauw
 print(check)
 
+def tmean(f):
+    return (tauv*np.log((tauv*(1 + fi*tauw)*(c*f*k*M*pr + fi*(k + f*pr)*v0))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauvth*(1 + fi*tauv)*tauw*w0))))/(1 + fi*tauv)
+    
 flist=np.linspace(0,40,100)
 ftlist=[] # NOISE NOW
 for i,f in enumerate(flist):
     print(i/len(flist))
     res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
     ftlist.append(res[8])
+    
+tsim = tmean(flist)
 
 plt.scatter(flist,ftlist, label='simulations', color='blue')
 plt.ylabel('Coefficient of variation squared')
@@ -282,18 +386,16 @@ kw=1
 v0=-0.1
 tauw=1
 
-tauvth=0.03
-tauv=1
+delta_t = 0.001
+tmax = 10 # <-------------- TMAX
+navgs = 1
 
 n=0 # occupied states
 v=0
 w=0
 
-delta_t = 0.001
-tmax = 10 # <-------------- TMAX
-navgs=1
-
-tauv = 1/(1/tauvth-fi)
+tauvth=0.2
+tauv=10
 
 def getfi(tauvth, tauv):
     return 1/tauvth - 1/tauv
@@ -307,15 +409,13 @@ def tmean2(f):
     return (tauv*np.log((tauv*(c*f*k*M*pr*(1 + fi*tauw) + fi*(k + f*pr)*(v0 + fi*tauw*v0 + kw*tauw*w0)))/(c*f*k*M*pr*tauv*(1 + fi*tauw) + (k + f*pr)*((1 + fi*tauw)*(fi*tauv*v0 - (1 + fi*tauv)*vb) + fi*kw*tauv*tauw*w0))))/(1 + fi*tauv)
 
 flist=np.linspace(0,100,100)
-# =============================================================================
-# ftlist=[] 
-# for i,f in enumerate(flist):
-#     print(i/len(flist))
-#     res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
-#     ftlist.append(res[8])
-# 
-# plt.scatter(flist,ftlist, label='simulations', color='blue')
-# =============================================================================
+ftlist=[] 
+for i,f in enumerate(flist):
+    print(i/len(flist))
+    res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+    ftlist.append(res[8])
+
+plt.scatter(flist,ftlist, label='simulations', color='blue')
 plt.plot(flist, tmean2(flist))
 plt.ylabel('Coefficient of variation squared')
 plt.xlabel('Excitatory neuron frequency')
