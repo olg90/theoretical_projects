@@ -24,7 +24,7 @@ def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauv
         postvth=[]
         
         tcurr=0
-        ratio = 0
+        ratio = 0.3
         timer = delta_t
         while tcurr < tmax:
             t0=exponential(1/f) # action potential
@@ -84,6 +84,79 @@ def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauv
     Tmean = np.mean(tavgs)
     CVT2 = np.mean(cavgs)
     return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
+
+def simulate2(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+    
+    for _ in range(navgs):
+    
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        wlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        postvth=[]
+        
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2=exponential(1/fi)
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr)
+                n-=b
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+    
+            elif t2<t0 and t2<t1 and t2<t3: # add a docked vesicle
+                v=v0
+                w=w0
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                postvth.append(vth)
+                v=0
+                
+            # Update the continuous dynamics
+    
+            v += (-v / tauv) * tmin
+            vth += ((vb-vth) / tauvth - kw * w) * tmin
+            w += (-w/tauw)*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
+
 
 # =============================================================================
 #%% Test 1: Plotting simulations
@@ -157,6 +230,35 @@ w=0
 delta_t = 0.001
 tmax = 10 # <-------------- TMAX
 navgs=1
+
+# =============================================================================
+# f=100
+# fi=20
+# pr=0.2
+# M=100
+# k=10
+# tauv=0.1
+# tauvth=0.1
+# 
+# vb=0.2
+# vth=vb
+# 
+# w0=0.1
+# kw=1
+# 
+# v0=-0.1
+# 
+# c=0.003
+# tauw=1
+# 
+# n=0 # occupied states
+# v=0
+# w=0
+# 
+# delta_t = 0.001
+# tmax = 100 # <-------------- TMAX
+# navgs=1
+# =============================================================================
 
 check = tauvth + fi*tauvth*tauw>tauw
 print(check)
@@ -420,3 +522,52 @@ plt.plot(flist, tmean2(flist))
 plt.ylabel('Coefficient of variation squared')
 plt.xlabel('Excitatory neuron frequency')
 plt.legend()
+#%%  Test 6 - 2D plot f and fi vs Fout
+
+f=100
+pr=0.1
+M=100
+k=10
+tauv=1
+c=0.01
+
+vb=0.2
+vth=vb
+tauvth=1
+
+w0=0.1
+kw=1
+v0=-0.1
+tauw=1
+
+n=0 # occupied states
+v=0
+w=0
+
+delta_t = 0.001
+tmax = 100 # <-------------- TMAX
+navgs=1
+
+flist=np.linspace(0,100,50)
+filist=np.linspace(0,20,50)
+ftlist=np.zeros((len(flist), len(filist)))
+for i,f in enumerate(flist):
+    print(i/len(flist))
+    for j, fi in enumerate(filist):
+        res=simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs)
+        ftlist[i,j]=res[7]
+
+Flist = 1/ftlist
+# =============================================================================
+# plt.imshow(Flist, origin='lower', cmap='gray',
+#            extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
+# plt.xlabel('Excitation')
+# plt.ylabel('Inhibition')
+# plt.colorbar()
+# =============================================================================
+plt.contourf(Flist, origin='lower', cmap='gray', levels=20,
+             extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
+plt.xlabel('Inhibition')
+plt.ylabel('Excitation')
+plt.colorbar()
+
