@@ -84,100 +84,26 @@ def simulate(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauv
     Tmean = np.mean(tavgs)
     CVT2 = np.mean(cavgs)
     return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
-
-def simulate2(n, v, w, vth, c, f, fi, w0, v0, kw, tauw, pr, M, k,  vb, tauv, tauvth, tmax, delta_t, navgs):
-    
-    tavgs=[]
-    cavgs=[]
-    
-    for _ in range(navgs):
-    
-        nlist=[]
-        vlist=[]
-        vthlist=[]
-        wlist=[]
-        tlist=[]
-        prelist=[]
-        postlist=[]
-        postvth=[]
-        
-        tcurr=0
-        ratio = 0.3
-        timer = delta_t
-        while tcurr < tmax:
-            t0=exponential(1/f) # action potential
-            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
-            t2=exponential(1/fi)
-            t3 = timer
-    
-            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
-                b = binomial(n, pr)
-                n-=b
-                v=v+c*b
-                tmin = t0
-                timer-=tmin
-                prelist.append(tcurr+tmin)
-    
-            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
-                n+=1
-                tmin = t1
-                timer-=tmin
-    
-            elif t2<t0 and t2<t1 and t2<t3: # add a docked vesicle
-                v=v0
-                w=w0
-                tmin=t2
-                timer-=tmin
-    
-            else:
-                tmin=t3
-                timer = delta_t
-                
-            tcurr += tmin
-            if v>=vth:
-                postlist.append(tcurr)
-                postvth.append(vth)
-                v=0
-                
-            # Update the continuous dynamics
-    
-            v += (-v / tauv) * tmin
-            vth += ((vb-vth) / tauvth - kw * w) * tmin
-            w += (-w/tauw)*tmin
-    
-        Tlist = np.diff(postlist)
-        Tmean = np.mean(Tlist)
-        CVT2=np.var(Tlist)/Tmean**2
-        FFn=np.var(nlist)/np.mean(nlist)
-        FFv=np.var(vlist)/np.mean(vlist)
-        
-        tavgs.append(Tmean)
-        cavgs.append(CVT2)
-    Tmean = np.mean(tavgs)
-    CVT2 = np.mean(cavgs)
-    return tlist, nlist, vlist, wlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, postvth
-
-
 # =============================================================================
 #%% Test 1: Plotting simulations
 f=100
 fi=20
-pr=0.2
+pr=0.1
 M=100
 k=10
-tauv=0.1
-tauvth=0.1
+tauv=1
+tauvth=1
 
 vb=0.2
 vth=vb
 
-w0=0.1
-kw=1
+w0=0.2
+kw=1 # 1
 
 v0=-0.1
 
-c=0.003
-tauw=1
+c=0.01
+tauw=0.1
 
 n=0 # occupied states
 v=0
@@ -198,6 +124,7 @@ veq=(tauv*(c*f*k*M*pr + fi*(k + f*pr)*v0))/((k + f*pr)*(1 + fi*tauv))
 vthsim=np.mean(res[4])*np.ones(len(res[0]))
 vsim=np.mean(res[2])*np.ones(len(res[0]))
 
+plt.subplot(2,1,1)
 plt.plot(res[0], res[2], label='v')
 plt.plot(res[0], res[4], color='k')
 plt.plot(res[0], vtheq*np.ones(len(res[0])), label='vtheq')
@@ -205,6 +132,8 @@ plt.plot(res[0], vthsim, label='vthsim')
 plt.plot(res[0], veq*np.ones(len(res[0])), label='veq')
 plt.plot(res[0], vsim, label='vsim')
 plt.legend()
+plt.subplot(2,1,2)
+plt.plot(res[0], res[3])
 #%%  Test 2 - firing rate eq vs sim
 # Results for bandpass effects
 f=100
@@ -286,22 +215,23 @@ plt.plot(filist, 1/teq, label='theoretical', color='k', linewidth=3)
 plt.legend()
 #%%  Test 2.1 - firing rate eq vs sim, TESTS
 f=100
-pr=0.2
+pr=0.1
 M=100
 k=10
-tauv=0.1
-tauvth=0.1
+tauv=1
+tauvth=0.8
 
 vb=0.2
 vth=vb
 
-w0=0.1
+w0=0.2
 kw=1
 
 v0=-0.1
 
 c=0.01
 tauw=1
+
 
 n=0 # occupied states
 v=0
@@ -314,7 +244,7 @@ navgs=1
 check = tauvth + fi*tauvth*tauw>tauw
 print(check)
 
-filist=np.linspace(0,20,100)
+filist=np.linspace(0,50,100)
 ftlist=[]
 for i,fi in enumerate(filist):
     print(i/len(filist))
@@ -336,8 +266,8 @@ plt.plot(filist, teq, label='theoretical', color='k', linewidth=3)
 # =============================================================================
 plt.legend()
 #%%  Test 2.2 - firing rate eq vs sim for sweeping excitation
-fi=1
-pr=0.2
+fi=10
+pr=0.1
 M=100
 k=10
 tauv=1
@@ -359,6 +289,7 @@ w=0
 delta_t = 0.001
 tmax = 10 # <-------------- TMAX
 navgs=1
+
 
 check = tauvth + fi*tauvth*tauw>tauw
 print(check)
@@ -558,16 +489,19 @@ for i,f in enumerate(flist):
         ftlist[i,j]=res[7]
 
 Flist = 1/ftlist
+#%%
+plt.imshow(Flist, origin='lower', cmap='viridis',
+           extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
+plt.xlabel('Inhibitory frequency (Hz)')
+plt.ylabel('Excitatory frequency (Hz)')
+plt.title('Postsynaptic firing rate')
+plt.colorbar()
 # =============================================================================
-# plt.imshow(Flist, origin='lower', cmap='gray',
-#            extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
-# plt.xlabel('Excitation')
-# plt.ylabel('Inhibition')
+# #%%
+# plt.contourf(Flist, origin='lower', cmap='gray', levels=10,
+#              extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
+# plt.xlabel('Inhibition')
+# plt.ylabel('Excitation')
 # plt.colorbar()
 # =============================================================================
-plt.contourf(Flist, origin='lower', cmap='gray', levels=20,
-             extent=[flist[0], flist[-1], filist[0], filist[-1]], aspect='auto')
-plt.xlabel('Inhibition')
-plt.ylabel('Excitation')
-plt.colorbar()
 
