@@ -1,0 +1,343 @@
+#%%
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+
+def simulate(n, v, z, vth, f, pr, M, k,  tauv, tmax, delta_t, navgs, cz, kz, 
+             tauz, tauprime, H, prmin, prtype):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        tprev=0
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = timer
+
+            if t0 < t1 and t0 < t2: # AP occurrs
+                b = binomial(n, pr(z, tcurr-tprev, tauprime, H, prmin, prtype))
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                tprev=tcurr
+
+            elif t1<t0 and t1<t2: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+            z = z + (-z/tauz) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv
+
+def getprmax(z, prtype):
+    if prtype==0:
+        return 1
+    if prtype==1:
+# =============================================================================
+#         kz1=0.5
+#         return z
+# =============================================================================
+        B = 1
+        A = prmin
+        return (B-A)*(1-np.exp(-z))+A
+    if prtype==2:
+        return 1*np.exp(-z)
+    if prtype==3:
+        a1=1
+        a2=0.01
+        a3=20
+        return a1*np.exp(-a2*(z-a3)**2)
+
+def pr(z, tdiff, tauprime, H, prmin, prtype):
+    prmax = getprmax(z,prtype)
+    return (prmax-prmin)/(1+(tdiff/tauprime)**H)+prmin
+
+# =============================================================================
+# zlist = np.linspace(0,100,100)
+# test=getprmax(zlist, 3)
+# plt.plot(test)
+# =============================================================================
+#%% prmax constant
+f=10
+M=100
+k=10
+
+H=1
+tauprime=1
+prmin=0.01
+prtype=0
+
+tauv=1
+vth=0.2
+
+tauz=0.1
+cz=10
+kz=0.01
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.01
+tmax = 100 # <-------------- TMAX
+navgs=1
+
+# =============================================================================
+# res=simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 
+#              tauz, tauprime, H, prmin, prtype)
+# 
+# plt.subplot(2,1,1)
+# plt.plot(res[0], res[2])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# plt.subplot(2,1,2)
+# plt.plot(res[0], res[3])
+# plt.show()
+# =============================================================================
+
+flist = np.linspace(0,1000,100)
+tlist=np.zeros_like(flist)
+for i,f in enumerate(flist):
+    print(i)
+    res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, tauz, tauprime, H, prmin, prtype)
+    tlist[i]=res[7]
+
+plt.plot(flist, 1/tlist)
+
+#check
+plt.plot(flist, flist, color='k')
+
+if prtype==0:
+    plt.title('prmax=constant')
+if prtype==1:
+    plt.title('prmax=increasing')
+if prtype==2:
+    plt.title('prmax=decreasing, prmax(z)=1000*exp(-z)')
+if prtype==3:
+    plt.title('prmax=band-pass')
+    
+plt.ylabel('Firing rate')
+plt.xlabel('Input frequency')
+#%% prmax increasing
+f=10
+k=10
+M=100
+
+H=1
+tauprime=1
+prmin=1
+
+tauv=1
+vth=0.2
+
+tauz=0.1 #0.1
+cz=5
+kz=0.01
+
+n=0 # occupied states
+v=0
+z=0
+
+prtype=1
+
+delta_t = 0.001
+tmax = 30 # <-------------- TMAX
+navgs=1
+
+# =============================================================================
+# res=simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 
+#              tauz, tauprime, H, prmin, prtype)
+# 
+# plt.subplot(2,1,1)
+# plt.plot(res[0], res[2])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# plt.subplot(2,1,2)
+# plt.plot(res[0], res[3])
+# plt.show()
+# =============================================================================
+
+flist = np.linspace(0,500,100)
+tlist=np.zeros_like(flist)
+for i,f in enumerate(flist):
+    print(i)
+    res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, tauz, tauprime, H, prmin, prtype)
+    tlist[i]=res[7]
+
+plt.plot(flist, 1/tlist)
+
+#check
+plt.plot(flist, flist, color='k')
+
+if prtype==0:
+    plt.title('prmax=constant')
+if prtype==1:
+    plt.title('prmax=increasing')
+if prtype==2:
+    plt.title('prmax=decreasing, prmax(z)=1000*exp(-z)')
+if prtype==3:
+    plt.title('prmax=band-pass')
+    
+plt.ylabel('Firing rate')
+plt.xlabel('Input frequency')
+#%% prmax decreasing
+f=10
+k=10
+M=100
+
+H=1
+tauprime=1
+prmin=1
+prtype=2
+
+tauv=1
+vth=0.2
+
+tauz=0.1
+cz=10
+kz=0.05
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.001
+tmax = 30 # <-------------- TMAX
+navgs=1
+
+# =============================================================================
+# res=simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 
+#              tauz, tauprime, H, prmin, prtype)
+# 
+# plt.subplot(2,1,1)
+# plt.plot(res[0], res[2])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# plt.subplot(2,1,2)
+# plt.plot(res[0], res[3])
+# plt.show()
+# =============================================================================
+
+flist = np.linspace(0,100,100)
+tlist=np.zeros_like(flist)
+for i,f in enumerate(flist):
+    print(i)
+    res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, tauz, tauprime, H, prmin, prtype)
+    tlist[i]=res[7]
+
+plt.plot(flist, 1/tlist)
+
+if prtype==0:
+    plt.title('prmax=constant')
+if prtype==1:
+    plt.title('prmax=increasing')
+if prtype==2:
+    plt.title('prmax=decreasing, prmax(z)=1000*exp(-z)')
+if prtype==3:
+    plt.title('prmax=band-pass')
+    
+plt.ylabel('Firing rate')
+plt.xlabel('Input frequency')
+#%% prmax bandpass
+f=10
+k=10
+M=100
+
+H=1
+tauprime=1
+prmin=1
+prtype=3
+
+tauv=1
+vth=0.2
+
+tauz=0.1
+cz=10
+kz=0.01
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.001
+tmax = 30 # <-------------- TMAX
+navgs=1
+
+# =============================================================================
+# res=simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 
+#              tauz, tauprime, H, prmin, prtype)
+# 
+# plt.subplot(2,1,1)
+# plt.plot(res[0], res[2])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# plt.subplot(2,1,2)
+# plt.plot(res[0], res[3])
+# plt.show()
+# =============================================================================
+
+flist = np.linspace(0,400,100)
+tlist=np.zeros_like(flist)
+for i,f in enumerate(flist):
+    print(i)
+    res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, tauz, tauprime, H, prmin, prtype)
+    tlist[i]=res[7]
+
+plt.plot(flist, 1/tlist)
+
+if prtype==0:
+    plt.title('prmax=constant')
+if prtype==1:
+    plt.title('prmax=increasing')
+if prtype==2:
+    plt.title('prmax=decreasing, prmax(z)=1000*exp(-z)')
+if prtype==3:
+    plt.title('prmax=band-pass')
+    
+plt.ylabel('Firing rate')
+plt.xlabel('Input frequency')
