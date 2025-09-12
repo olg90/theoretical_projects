@@ -1,0 +1,199 @@
+#%% Define the functions for fitting
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+    ratio = 0.3
+    e=1e-6
+
+    for _ in range(navgs):
+        vlist=[]
+        nlist=[]
+        nilist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        n=0
+        ni=0
+        v=0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2=exponential(1/(k*(M-n)+e))
+            t3=exponential(1/(ki*(Mi-ni)+e))
+            t4 = timer
+
+            if t0<t1 and t0<t2 and t0<t3 and t0<t4: # AP occurrs
+                b = binomial(n, pr)
+                n=n-b
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                
+            if t1<t0 and t1<t2 and t1<t3 and t1<t4: # AP occurrs
+                bi = binomial(ni, pri)
+                ni=ni-bi
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                
+            if t2<t0 and t2<t1 and t2<t3 and t2<t4: # AP occurrs
+                n=n+1
+                tmin=t2
+                timer-=tmin
+            if t3<t0 and t3<t1 and t3<t2 and t3<t4: # AP occurrs
+                ni=ni+1
+                tmin=t3
+                timer-=tmin
+
+            else:
+                tmin=t4
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    nlist.append(n)
+                    nilist.append(ni)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.01
+                v=0
+
+            # Update the continuous dynamics
+            v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2
+
+
+f=10 # excitatory frequency
+fi=10
+pr=0.2
+pri=0.4
+M=100
+Mi=50
+k=5
+ki=5
+c=0.003
+ci=0.003
+
+tauv=0.05
+vth=0.02 # Threshold value
+
+tmax = 0.25 # <-------------- TMAX
+delta_t = 0.001
+navgs = 1
+
+tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2 = \
+    simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+    #%%
+    
+    
+fs=15
+plt.subplot(2,1,1)
+plt.step(tlist, nlist, label='n', where='post')
+plt.step(tlist, nilist, label='ni', where='post')
+plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
+# =============================================================================
+# for x in preliste[2:]:
+#     plt.axvline(x, color='r', alpha=0.4)
+# for y in prelisti[2:]:
+#     plt.axvline(y, color='b', alpha=0.4)
+# =============================================================================
+plt.tick_params(axis='both', labelsize=fs)
+plt.xticks([])
+plt.legend()
+plt.subplot(2,1,2)
+plt.plot(tlist, np.array(vlist)*1e3)
+plt.plot(tlist, vth*np.ones(len(tlist))*1e3, color='k')
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylim([np.min(vlist)-0.005, vth+0.02])
+plt.show()
+#%%
+
+
+ptest=1
+
+if ptest==1:
+    
+    tlist, vlist, wlist, prelist, postlist, Tmean, CVT2 = \
+        simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs, cmax, cmin, vc, H)
+    plt.subplot(2,1,1)
+    plt.plot(tlist, vlist, label=r'$v_m$')
+    plt.plot(tlist, vth*np.ones(len(tlist)), label='vth', color='k')
+    plt.plot(tlist, 0*np.ones(len(tlist)), label='v0', color='gray', linestyle='--')
+    plt.legend(loc='upper right')
+    plt.ylabel('Volts')
+    plt.xticks([])
+    plt.subplot(2,1,2)
+    plt.plot(tlist, wlist, label='w')
+    plt.legend(loc='upper right')
+    plt.xlabel('Time')
+    plt.ylabel('Sodium channel\navailability')
+    plt.show()
+
+if ptest==10:
+    filist=[0,50,100,150,200,250,300]
+    ftlist=[]
+    for i,fi in enumerate(filist):
+        print(i, len(filist))
+        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+        ftlist.append(res[5])
+    
+    tsim=np.array(ftlist)
+    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+    
+    # plt.subplot(2,1,2)
+    for i in range(3):
+        plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
+    fs=15
+    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
+    
+if ptest==100:
+    filist=np.linspace(0,300,12)
+    ftlist=[]
+    for i,fi in enumerate(filist):
+        print(i, len(filist))
+        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+        ftlist.append(res[5])
+    
+    tsim=np.array(ftlist)
+    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+    
+    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
+
