@@ -91,8 +91,8 @@ def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2
 
 
-f=100 # excitatory frequency
-fi=50
+f=30 # excitatory frequency
+fi=0
 pr=0.2
 pri=0.2
 M=100
@@ -105,36 +105,34 @@ ci=0.003
 tauv=0.05
 vth=0.02 # Threshold value
 
-tmax = 20 # <-------------- TMAX
+tmax = 0.25 # <-------------- TMAX
 delta_t = 0.001
 navgs = 1
 
-# =============================================================================
-# tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2 = \
-#     simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-# fs=15
-# plt.subplot(2,1,1)
-# plt.step(tlist, nlist, label='n', where='post')
+tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2 = \
+    simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+fs=15
+plt.subplot(2,1,1)
+plt.step(tlist, nlist, label='n', where='post')
 # plt.step(tlist, nilist, label='ni', where='post')
-# # plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
-# # =============================================================================
-# # for x in preliste[2:]:
-# #     plt.axvline(x, color='r', alpha=0.4)
-# # for y in prelisti[2:]:
-# #     plt.axvline(y, color='b', alpha=0.4)
-# # =============================================================================
-# plt.tick_params(axis='both', labelsize=fs)
-# plt.xticks([])
-# plt.legend()
-# plt.subplot(2,1,2)
-# plt.plot(tlist, np.array(vlist))
-# plt.plot(tlist, vth*np.ones(len(tlist)), color='k')
-# plt.tick_params(axis='both', labelsize=fs)
-# plt.xlabel('Time (sec)', fontsize=fs)
-# # plt.ylim([np.min(vlist)-0.005, vth+0.02])
-# plt.show()
-# #%%
+# plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
 # =============================================================================
+# for x in preliste[2:]:
+#     plt.axvline(x, color='r', alpha=0.4)
+# for y in prelisti[2:]:
+#     plt.axvline(y, color='b', alpha=0.4)
+# =============================================================================
+plt.tick_params(axis='both', labelsize=fs)
+plt.xticks([])
+plt.legend()
+plt.subplot(2,1,2)
+plt.plot(tlist, np.array(vlist))
+plt.plot(tlist, vth*np.ones(len(tlist)), color='k')
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('Time (sec)', fontsize=fs)
+# plt.ylim([np.min(vlist)-0.005, vth+0.02])
+plt.show()
+#%%
 
 #% Vary parameters
 xlist = np.linspace(0.001,0.2,100)
