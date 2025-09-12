@@ -175,7 +175,7 @@ vth=0.02 # Threshold value
 
 tmax = 30 # <-------------- TMAX
 delta_t = 0.001
-navgs = 100
+navgs = 10
 
 xlist = np.linspace(0.001, 0.2, 100)
 fi_list = [0, 10, 25, 100]  # inhibitory frequencies to test
@@ -196,14 +196,14 @@ for j, fi_val in enumerate(fi_list):
     
 # Plot Fout
 plt.subplot(2, 1, 1)
-for F in Fout:
-    plt.plot(xlist*1e3, F, label=f'fi={fi_val}')
+for i, F in enumerate(Fout):
+    plt.plot(xlist*1e3, F, label='fi={}'.format(fi_list[i]))
 plt.ylabel('Fout')
 
 # Plot CV2
 plt.subplot(2, 1, 2)
-for C in cv2:
-    plt.plot(xlist*1e3, C, label=f'fi={fi_val}')
+for i, C in enumerate(cv2):
+    plt.plot(xlist*1e3, C, label='fi={}'.format(fi_list[i]))
 plt.ylabel('CV2')
 plt.xlabel('Time constant (ms)')
 
@@ -247,6 +247,7 @@ im1 = ax[1].imshow(cv2, origin='lower', extent=extent, aspect='auto',
                    vmin=np.nanmin(cv2), vmax=np.nanmax(cv2))
 ax[1].set_title('Noise')
 ax[1].set_xlabel('Inhibitory input frequency (Hz)')
+ax[1].set_ylabel('Excitatory input frequency (Hz)')
 ax[1].set_yticks([])
 fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
 
@@ -274,7 +275,7 @@ fig.colorbar(c0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
 c1 = ax[1].contourf(X, Y, cv2, levels=lvlc, cmap='viridis')
 ax[1].set_title('Noise')
 ax[1].set_xlabel('Inhibitory input frequency (Hz)')
-ax[1].set_yticks([])
+ax[1].set_ylabel('Excitatory input frequency (Hz)')
 fig.colorbar(c1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
 
 plt.tight_layout()
