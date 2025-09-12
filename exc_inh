@@ -91,12 +91,12 @@ def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2
 
 
-f=10 # excitatory frequency
-fi=10
+f=100 # excitatory frequency
+fi=50
 pr=0.2
-pri=0.4
+pri=0.2
 M=100
-Mi=50
+Mi=100
 k=5
 ki=5
 c=0.003
@@ -105,95 +105,244 @@ ci=0.003
 tauv=0.05
 vth=0.02 # Threshold value
 
-tmax = 0.25 # <-------------- TMAX
+tmax = 20 # <-------------- TMAX
 delta_t = 0.001
 navgs = 1
 
-tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2 = \
-    simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-    #%%
+# =============================================================================
+# tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2 = \
+#     simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+# fs=15
+# plt.subplot(2,1,1)
+# plt.step(tlist, nlist, label='n', where='post')
+# plt.step(tlist, nilist, label='ni', where='post')
+# # plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
+# # =============================================================================
+# # for x in preliste[2:]:
+# #     plt.axvline(x, color='r', alpha=0.4)
+# # for y in prelisti[2:]:
+# #     plt.axvline(y, color='b', alpha=0.4)
+# # =============================================================================
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.xticks([])
+# plt.legend()
+# plt.subplot(2,1,2)
+# plt.plot(tlist, np.array(vlist))
+# plt.plot(tlist, vth*np.ones(len(tlist)), color='k')
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.xlabel('Time (sec)', fontsize=fs)
+# # plt.ylim([np.min(vlist)-0.005, vth+0.02])
+# plt.show()
+# #%%
+# =============================================================================
+
+#% Vary parameters
+xlist = np.linspace(0.001,0.2,100)
+Fout=np.zeros(len(xlist))
+cv2=np.zeros_like(Fout)
+for i, x in enumerate(xlist):
+    print(i, len(xlist))
+    tauv=x
+    res=simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+    Fout[i]=1/res[7]
+    cv2[i]=res[8]
     
-    
-fs=15
 plt.subplot(2,1,1)
-plt.step(tlist, nlist, label='n', where='post')
-plt.step(tlist, nilist, label='ni', where='post')
-plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
-# =============================================================================
-# for x in preliste[2:]:
-#     plt.axvline(x, color='r', alpha=0.4)
-# for y in prelisti[2:]:
-#     plt.axvline(y, color='b', alpha=0.4)
-# =============================================================================
-plt.tick_params(axis='both', labelsize=fs)
-plt.xticks([])
-plt.legend()
+plt.ylabel('Fout')
+plt.plot(xlist, Fout)
 plt.subplot(2,1,2)
-plt.plot(tlist, np.array(vlist)*1e3)
-plt.plot(tlist, vth*np.ones(len(tlist))*1e3, color='k')
-plt.tick_params(axis='both', labelsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.ylim([np.min(vlist)-0.005, vth+0.02])
+plt.ylabel('CV2')
+plt.plot(xlist*1e3, cv2)
+plt.xlabel('Time constant (ms)')
 plt.show()
-#%%
 
 
-ptest=1
+#%%  Check for three different fis for tauv
 
-if ptest==1:
-    
-    tlist, vlist, wlist, prelist, postlist, Tmean, CVT2 = \
-        simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs, cmax, cmin, vc, H)
-    plt.subplot(2,1,1)
-    plt.plot(tlist, vlist, label=r'$v_m$')
-    plt.plot(tlist, vth*np.ones(len(tlist)), label='vth', color='k')
-    plt.plot(tlist, 0*np.ones(len(tlist)), label='v0', color='gray', linestyle='--')
-    plt.legend(loc='upper right')
-    plt.ylabel('Volts')
-    plt.xticks([])
-    plt.subplot(2,1,2)
-    plt.plot(tlist, wlist, label='w')
-    plt.legend(loc='upper right')
-    plt.xlabel('Time')
-    plt.ylabel('Sodium channel\navailability')
-    plt.show()
+f=100 # excitatory frequency
+fi=50
+pr=0.2
+pri=0.2
+M=100
+Mi=100
+k=5
+ki=5
+c=0.003
+ci=0.003
 
-if ptest==10:
-    filist=[0,50,100,150,200,250,300]
-    ftlist=[]
-    for i,fi in enumerate(filist):
-        print(i, len(filist))
-        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
-        ftlist.append(res[5])
-    
-    tsim=np.array(ftlist)
-    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
-    
-    # plt.subplot(2,1,2)
-    for i in range(3):
-        plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
-    fs=15
-    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
-    plt.ylabel('Steady state mean firing rate', fontsize=fs)
-    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
-    plt.tick_params(axis='both', labelsize=fs)
-    plt.legend(fontsize=fs-3)
-    plt.show()
-    
-if ptest==100:
-    filist=np.linspace(0,300,12)
-    ftlist=[]
-    for i,fi in enumerate(filist):
-        print(i, len(filist))
-        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
-        ftlist.append(res[5])
-    
-    tsim=np.array(ftlist)
-    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
-    
-    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
-    plt.ylabel('Steady state mean firing rate', fontsize=fs)
-    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
-    plt.legend(fontsize=fs-3)
-    plt.show()
+tauv=0.05
+vth=0.02 # Threshold value
 
+tmax = 30 # <-------------- TMAX
+delta_t = 0.001
+navgs = 1
+
+xlist = np.linspace(0.001, 0.2, 100)
+fi_list = [0, 25, 50, 100]  # inhibitory frequencies to test
+
+for j, fi_val in enumerate(fi_list):
+    Fout = np.zeros(len(xlist))
+    cv2 = np.zeros_like(Fout)
+    
+    for i, x in enumerate(xlist):
+        print(i, len(xlist), j, len(fi_list))
+        tauv = x
+        res = simulate(vth, c, ci, f, fi_val, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        Fout[i] = 1 / res[7]
+        cv2[i] = res[8]
+    
+    # Plot Fout
+    plt.subplot(2, 1, 1)
+    plt.plot(xlist*1e3, Fout, label=f'fi={fi_val}')
+    plt.ylabel('Fout')
+    
+    # Plot CV2
+    plt.subplot(2, 1, 2)
+    plt.plot(xlist*1e3, cv2, label=f'fi={fi_val}')
+    plt.ylabel('CV2')
+    plt.xlabel('Time constant (ms)')
+
+plt.subplot(2, 1, 1)
+plt.legend()
+plt.subplot(2, 1, 2)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+#%% Heatmap
+
+# Heammap generation
+flist = np.linspace(0,100,20)
+filist=np.linspace(0,100,20)
+Fout=np.zeros((len(flist), len(filist)))
+cv2=np.zeros_like(Fout)
+for i, f in enumerate(flist):
+    for j, fi in enumerate(filist):
+        print(i,j)
+        res=simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        Fout[i,j]=1/res[7]
+        cv2[i,j]=res[8]
+
+#%% heatmap plot
+        
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+
+# First plot with its own color scale
+im0 = ax[0].imshow(Fout, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(Fout), vmax=np.nanmax(Fout))
+ax[0].set_title('Fout')
+ax[0].set_xlabel('Inhibitory input frequency (Hz)')
+ax[0].set_ylabel('Excitatory input frequency (Hz)')
+fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+
+# Second plot with its own color scale
+im1 = ax[1].imshow(cv2, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2))
+ax[1].set_title('Noise')
+ax[1].set_xlabel('Inhibitory input frequency (Hz)')
+ax[1].set_yticks([])
+fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+
+plt.tight_layout()
+plt.show()
+
+
+#%% contour plots
+        
+X, Y = np.meshgrid(filist, flist)
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+
+lvlf=20
+lvlc=20
+
+# First contour plot
+c0 = ax[0].contourf(X, Y, Fout, levels=lvlf, cmap='viridis')
+ax[0].set_title('Fout')
+ax[0].set_xlabel('Inhibitory input frequency (Hz)')
+ax[0].set_ylabel('Excitatory input frequency (Hz)')
+fig.colorbar(c0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+
+# Second contour plot
+c1 = ax[1].contourf(X, Y, cv2, levels=lvlc, cmap='viridis')
+ax[1].set_title('Noise')
+ax[1].set_xlabel('Inhibitory input frequency (Hz)')
+ax[1].set_yticks([])
+fig.colorbar(c1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+
+plt.tight_layout()
+plt.show()
+
+#%% add numbers
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+
+ny, nx = Fout.shape  # rows, columns
+
+# First plot: Fout
+im0 = ax[0].imshow(Fout, origin='lower', aspect='equal',
+                   vmin=np.nanmin(Fout), vmax=np.nanmax(Fout))
+ax[0].set_title('Fout')
+fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+
+for i in range(ny):
+    for j in range(nx):
+        val = Fout[i, j]
+        if not np.isnan(val):
+            ax[0].text(j, i, f"{int(round(val))}", ha='center', va='center', color='white', fontsize=8)
+
+# Second plot: CV (multiply by 100)
+im1 = ax[1].imshow(cv2, origin='lower', aspect='equal',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2))
+ax[1].set_title('Noise')
+fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+
+for i in range(ny):
+    for j in range(nx):
+        val = cv2[i, j]
+        if not np.isnan(val):
+            ax[1].text(j, i, f"{int(round(val*100))}", ha='center', va='center', color='white', fontsize=8)
+
+plt.tight_layout()
+plt.show()
+
+
+#%% contour + numbers
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+
+ny, nx = Fout.shape  # rows, columns
+X, Y = np.meshgrid(np.arange(nx), np.arange(ny))  # pixel coordinates for centering
+
+lvlf=20
+lvlc=20
+
+
+# First plot: Fout contour
+c0 = ax[0].contourf(X, Y, Fout, levels=lvlf, origin='lower', cmap='viridis')
+ax[0].set_title('Fout')
+fig.colorbar(c0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+
+# Overlay numbers
+for i in range(ny):
+    for j in range(nx):
+        val = Fout[i, j]
+        if not np.isnan(val):
+            ax[0].text(j, i, f"{int(round(val))}", ha='center', va='center', color='white', fontsize=8)
+
+# Second plot: CV contour (multiply by 100)
+c1 = ax[1].contourf(X, Y, cv2, levels=lvlc, origin='lower', cmap='viridis')
+ax[1].set_title('Noise')
+fig.colorbar(c1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+
+# Overlay numbers
+for i in range(ny):
+    for j in range(nx):
+        val = cv2[i, j]
+        if not np.isnan(val):
+            ax[1].text(j, i, f"{int(round(val*100))}", ha='center', va='center', color='white', fontsize=8)
+
+plt.tight_layout()
+plt.show()
