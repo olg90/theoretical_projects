@@ -175,32 +175,37 @@ vth=0.02 # Threshold value
 
 tmax = 30 # <-------------- TMAX
 delta_t = 0.001
-navgs = 1
+navgs = 100
 
 xlist = np.linspace(0.001, 0.2, 100)
-fi_list = [0, 25, 50, 100]  # inhibitory frequencies to test
+fi_list = [0, 10, 25, 100]  # inhibitory frequencies to test
 
+Fout=[]
+cv2=[]
 for j, fi_val in enumerate(fi_list):
-    Fout = np.zeros(len(xlist))
-    cv2 = np.zeros_like(Fout)
-    
+    Foutj = np.zeros(len(xlist))
+    cv2j = np.zeros_like(Foutj)
     for i, x in enumerate(xlist):
         print(i, len(xlist), j, len(fi_list))
         tauv = x
         res = simulate(vth, c, ci, f, fi_val, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-        Fout[i] = 1 / res[7]
-        cv2[i] = res[8]
+        Foutj[i] = 1 / res[7]
+        cv2j[i] = res[8]
+    Fout.append(Foutj)
+    cv2.append(cv2j)
     
-    # Plot Fout
-    plt.subplot(2, 1, 1)
-    plt.plot(xlist*1e3, Fout, label=f'fi={fi_val}')
-    plt.ylabel('Fout')
-    
-    # Plot CV2
-    plt.subplot(2, 1, 2)
-    plt.plot(xlist*1e3, cv2, label=f'fi={fi_val}')
-    plt.ylabel('CV2')
-    plt.xlabel('Time constant (ms)')
+# Plot Fout
+plt.subplot(2, 1, 1)
+for F in Fout:
+    plt.plot(xlist*1e3, F, label=f'fi={fi_val}')
+plt.ylabel('Fout')
+
+# Plot CV2
+plt.subplot(2, 1, 2)
+for C in cv2:
+    plt.plot(xlist*1e3, C, label=f'fi={fi_val}')
+plt.ylabel('CV2')
+plt.xlabel('Time constant (ms)')
 
 plt.subplot(2, 1, 1)
 plt.legend()
@@ -210,7 +215,7 @@ plt.tight_layout()
 plt.show()
 
 
-#%% Heatmap
+#%% Calculate the heatmap of Tmean and CV2 vs f and fi
 
 # Heammap generation
 flist = np.linspace(0,100,20)
@@ -224,7 +229,7 @@ for i, f in enumerate(flist):
         Fout[i,j]=1/res[7]
         cv2[i,j]=res[8]
 
-#%% heatmap plot
+#%% plot the heatmap
         
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
