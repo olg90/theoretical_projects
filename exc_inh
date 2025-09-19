@@ -7,6 +7,7 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 import pandas as pd
+
 def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     
     tavgs=[]
@@ -19,7 +20,6 @@ def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     biav=[]
     neblistav=[] # num bursts until AP
     niblistav=[]
-    
 
     for _ in range(navgs):
         vlist=[]
@@ -98,19 +98,17 @@ def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
                 niblist.append(nibursts)
                 nebursts=0
                 nibursts=0
-                
 
             # Update the continuous dynamics
             if tauv != np.inf:
                 v += (-v / tauv) * tmin
                 
-    
         Tlist = np.diff(postlist)
         Tmean = np.mean(Tlist)
         CVT2=np.var(Tlist)/Tmean**2
         
         vavgs.append(np.mean(vlist))
-        vcv2.append(np.var(vlist)/np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
         
         tavgs.append(Tmean)
         cavgs.append(CVT2)
@@ -118,7 +116,6 @@ def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
         biav.append(np.mean(bilist))
         neblistav.append(np.mean(neblist))
         niblistav.append(np.mean(niblist))
-        
         
     Tmean = np.mean(tavgs)
     CVT2 = np.mean(cavgs)
@@ -129,9 +126,11 @@ def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     
     vavgs=np.mean(vavgs)
     vcv2=np.mean(vcv2)
+    
     #         0     1     2          3      4         5           6       7
     return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, \
         CVT2, beav, biav, neblistav, niblistav, vavgs, vcv2
+        #8     9      10      11          12     13     14
 
 def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs):
 
@@ -167,11 +166,9 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
         while tcurr < tmax:
             t0=exponential(1/(f+e)) # action potential
             t1=exponential(1/(fi+e))
-            t2=exponential(1/(k*(M-n)+e))
-            t3=exponential(1/(ki*(Mi-ni)+e))
-            t4 = timer
+            t2 = timer
 
-            if t0<t1 and t0<t2 and t0<t3 and t0<t4: # AP occurrs
+            if t0<t1 and t0<t2: # AP occurrs
                 if btype == 'bin':
                     b = binomial(M, pr)
                 if btype == 'pois':
@@ -184,7 +181,7 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
                 nebursts+=1
                 
                 
-            if t1<t0 and t1<t2 and t1<t3 and t1<t4: # AP occurrs
+            if t1<t0 and t1<t2: # AP occurrs
                 if btype == 'bin':
                     bi = binomial(Mi, pri)
                 if btype == 'pois':
@@ -197,7 +194,7 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
                 nibursts+=1
                 
             else:
-                tmin=t4
+                tmin=t2
                 timer = delta_t
                 if tcurr >= ratio*tmax:
                     vlist.append(v)
@@ -223,7 +220,7 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
         CVT2=np.var(Tlist)/Tmean**2
         
         vavgs.append(np.mean(vlist))
-        vcv2.append(np.var(vlist)/np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
         
         
         tavgs.append(Tmean)
@@ -240,16 +237,19 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
     niblistav=np.mean(niblistav)
     vavgs=np.mean(vavgs)
     vcv2=np.mean(vcv2)
-    #                                                    5      6
+    #        0        1     2        3           4         5     6     7
     return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
         biav, neblistav, niblistav, vavgs, vcv2
+        # 8     9           10        11     12
         
-def to_dict(**x):
-    return x
+def cv2vesicle(k, pr, tauv, f, M):
+    return        (2*k**3*(-1 + pr - M*pr)*tauv + f**2*(-2 + pr)*pr**2*(1 + f*pr*tauv) - f*k*pr*(4 + pr*(-3 + 2*M + 2*f*tauv)) + k**2*(-2 + pr*(2 - 2*M + f*(-2 + pr)*tauv)))/(2.*f*k*M*pr*(-2*k + f*(-2 + pr)*pr)*tauv*(1 + k*tauv + f*pr*tauv))
+def cv2iid(tauv,f):
+    return 1/(2*f*tauv)
 
 f=100 # excitatory frequency
 fi=0
-pr=0.1
+pr=0.04
 pri=0.1
 M=100
 Mi=100
@@ -263,16 +263,12 @@ vth=0.02 # Threshold value
 
 tmax = 10 # <-------------- TMAX
 delta_t = 0.001
-navgs = 1
+navgs = 10
 
 btype='bin' # bin - binomial, pois - poisson
 lam=5
 lami=5
 
-def cv2vesicle(k, pr, tauv, f, M):
-    return        (2*k**3*(-1 + pr - M*pr)*tauv + f**2*(-2 + pr)*pr**2*(1 + f*pr*tauv) - f*k*pr*(4 + pr*(-3 + 2*M + 2*f*tauv)) + k**2*(-2 + pr*(2 - 2*M + f*(-2 + pr)*tauv)))/(2.*f*k*M*pr*(-2*k + f*(-2 + pr)*pr)*tauv*(1 + k*tauv + f*pr*tauv))
-def cv2iid(tauv,f):
-    return 1/(2*f*tauv)
 # =============================================================================
 # res=sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
 # resi=simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
@@ -281,37 +277,39 @@ def cv2iid(tauv,f):
 # print(res[7], res[8])
 # print(resi[5], resi[6])
 
-# Plot trajectories
-tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, biav, neblistav, niblistav, vavg, vcv2 = \
-    sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-fs=15
-plt.subplot(2,1,1)
-plt.step(tlist, nlist, label='n', where='post')
-# plt.step(tlist, nilist, label='ni', where='post')
-# plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
 # =============================================================================
-# for x in preliste[2:]:
-#     plt.axvline(x, color='r', alpha=0.4)
-# for y in prelisti[2:]:
-#     plt.axvline(y, color='b', alpha=0.4)
+# # Plot trajectories
+# tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, biav, neblistav, niblistav, vavg, vcv2 = \
+#     sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+# fs=15
+# plt.subplot(2,1,1)
+# plt.step(tlist, nlist, label='n', where='post')
+# # plt.step(tlist, nilist, label='ni', where='post')
+# # plt.ylim([np.min([nlist, nilist])-10, np.max([nlist, nilist])+10])
+# # =============================================================================
+# # for x in preliste[2:]:
+# #     plt.axvline(x, color='r', alpha=0.4)
+# # for y in prelisti[2:]:
+# #     plt.axvline(y, color='b', alpha=0.4)
+# # =============================================================================
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.xticks([])
+# plt.legend()
+# plt.subplot(2,1,2)
+# plt.plot(tlist, np.array(vlist))
+# plt.plot(tlist, vth*np.ones(len(tlist)), color='k')
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.xlabel('Time (sec)', fontsize=fs)
+# # plt.ylim([np.min(vlist)-0.005, vth+0.02])
+# plt.show()
+# 
+# print(beav, biav)
+# print(neblistav, niblistav)
+# #%%
 # =============================================================================
-plt.tick_params(axis='both', labelsize=fs)
-plt.xticks([])
-plt.legend()
-plt.subplot(2,1,2)
-plt.plot(tlist, np.array(vlist))
-plt.plot(tlist, vth*np.ones(len(tlist)), color='k')
-plt.tick_params(axis='both', labelsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-# plt.ylim([np.min(vlist)-0.005, vth+0.02])
-plt.show()
-
-print(beav, biav)
-print(neblistav, niblistav)
-#%%
 
 #% Vary parameters
-xlist = np.linspace(0.01, 100,20)
+xlist = np.linspace(1, 30,20)
 vmean=np.zeros_like(xlist)
 vcv2=np.zeros_like(xlist)
 vmeaniid=np.zeros_like(xlist)
@@ -328,52 +326,50 @@ for i, x in enumerate(xlist):
     vcv2iid[i]=resi[12]
 
 fig,ax=plt.subplots(2,1)
+# =============================================================================
 # ax[0].plot(xlist, vmean, label='vmean')
 # ax[0].plot(xlist, vcv2, label='vmeaniid')
-ax[0].plot(xlist, vmeaniid, label='CVv2')
-# ax[0].plot(xlist, cv2vesicle(k, pr, tauv, xlist, M), label='CVv2 eq')
+# =============================================================================
+ax[0].plot(xlist, vcv2, label='CVv2 vesc. sim')
+ax[0].plot(xlist, cv2vesicle(k, pr, tauv, xlist, M), label='CVv2 vesc. eq')
+ax[0].set_ylabel(f'CV$v^2$')
+ax[0].set_xticks([])
+# ax[0].set_ylim([0, 0.001])
 ax[0].legend()
-# ax[0].set_ylim([0, 0.01])
-ax[1].plot(xlist, vcv2iid, label='CVv2iid')
-# ax[1].plot(xlist, cv2iid(tauv, xlist), label='CVv2iid eq')
+ax[1].plot(xlist, vcv2iid, label='CVv2iid sim')
+ax[1].plot(xlist, cv2iid(tauv, xlist), label='CVv2iid eq')
 ax[1].legend()
+ax[1].set_xlabel('Input frequency')
+ax[1].set_ylabel(f'CV$v^2$')
 plt.show()
 
-    #%%
-    
-fs=20
-plt.subplot(2,1,1)
-plt.ylabel('Mean firing rate', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-plt.plot(xlist, Fout)
-
-plt.subplot(2,1,2)
-plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('Noise', fontsize=fs)
-plt.plot(xlist, cv2)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.show()
 
 
 #%%  Check for three different fis for tauv
 
+
 f=100 # excitatory frequency
-fi=50
-pr=0.2
-pri=0.2
+fi=0
+pr=0.02
+pri=0.1
 M=100
 Mi=100
-k=5
+k=10
 ki=5
-c=0.003
-ci=0.003
+c=0.001
+ci=0.001
 
-tauv=0.05
+tauv=0.01 #0.05
 vth=0.02 # Threshold value
 
-tmax = 100 # <-------------- TMAX
+tmax = 10 # <-------------- TMAX
 delta_t = 0.001
-navgs = 20
+navgs = 10
+
+btype='bin' # bin - binomial, pois - poisson
+lam=5
+lami=5
+
 
 xlist = np.linspace(0.001, 0.2, 40)
 fi_list = [0, 10, 25, 100]  # inhibitory frequencies to test
@@ -421,23 +417,28 @@ plt.show()
 
 #%% Calculate the heatmap of Tmean and CV2 vs f and fi
 
-f=30 # excitatory frequency
+
+f=100 # excitatory frequency
 fi=0
-pr=0.2
-pri=0.2
+pr=0.1
+pri=0.1
 M=100
 Mi=100
-k=5
-ki=5
+k=10
+ki=10
 c=0.003
 ci=0.003
 
-tauv=0.05
+tauv=0.01 #0.05
 vth=0.02 # Threshold value
 
 tmax = 20 # <-------------- TMAX
 delta_t = 0.001
 navgs = 100
+
+btype='bin' # bin - binomial, pois - poisson
+lam=5
+lami=5
 
 # Heammap generation
 flist = np.linspace(0,100,20)
@@ -446,12 +447,12 @@ Fout=np.zeros((len(flist), len(filist)))
 cv2=np.zeros_like(Fout)
 for i, f in enumerate(flist):
     for j, fi in enumerate(filist):
-        print(i,j)
-        res=sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-        Fout[i,j]=1/res[7]
-        cv2[i,j]=res[8]
+        print(i, len(flist), j, len(flist))
+        res=simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        Fout[i,j]=1/res[5]
+        cv2[i,j]=res[6]
 
-#%% plot the heatmap
+# plot the heatmap
         
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
