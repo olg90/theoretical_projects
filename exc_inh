@@ -2,16 +2,17 @@
 import numpy as np
 from matplotlib.pyplot import plot as pt
 import matplotlib.pyplot as plt
-from numpy.random import exponential, binomial, gamma
+from numpy.random import exponential, binomial, gamma, poisson
 from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 import pandas as pd
-
-def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
+def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     
     tavgs=[]
     cavgs=[]
+    vavgs=[]
+    vcv2=[]
     ratio = 0.3
     e=1e-6
     beav=[] # mean num bursts
@@ -100,11 +101,130 @@ def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
                 
 
             # Update the continuous dynamics
-            v += (-v / tauv) * tmin
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+                
     
         Tlist = np.diff(postlist)
         Tmean = np.mean(Tlist)
         CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist))
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        beav.append(np.mean(belist))
+        biav.append(np.mean(bilist))
+        neblistav.append(np.mean(neblist))
+        niblistav.append(np.mean(niblist))
+        
+        
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    beav=np.mean(beav)
+    biav=np.mean(biav)
+    neblistav=np.mean(neblistav)
+    niblistav=np.mean(niblistav)
+    
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #         0     1     2          3      4         5           6       7
+    return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, \
+        CVT2, beav, biav, neblistav, niblistav, vavgs, vcv2
+
+def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+    vavgs=[]
+    vcv2=[]
+    ratio = 0.3
+    e=1e-6
+    beav=[] # mean num bursts
+    biav=[]
+    neblistav=[] # num bursts until AP
+    niblistav=[]
+
+    for _ in range(navgs):
+        vlist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        belist=[]
+        bilist=[]
+        nebursts=0
+        nibursts=0
+        neblist=[]
+        niblist=[]
+        n=0
+        ni=0
+        v=0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2=exponential(1/(k*(M-n)+e))
+            t3=exponential(1/(ki*(Mi-ni)+e))
+            t4 = timer
+
+            if t0<t1 and t0<t2 and t0<t3 and t0<t4: # AP occurrs
+                if btype == 'bin':
+                    b = binomial(M, pr)
+                if btype == 'pois':
+                    b = poisson(lam)
+                belist.append(b)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                nebursts+=1
+                
+                
+            if t1<t0 and t1<t2 and t1<t3 and t1<t4: # AP occurrs
+                if btype == 'bin':
+                    bi = binomial(Mi, pri)
+                if btype == 'pois':
+                    bi = poisson(lami)
+                bilist.append(bi)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                nibursts+=1
+                
+            else:
+                tmin=t4
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.01
+                v=0
+                neblist.append(nebursts)
+                niblist.append(nibursts)
+                nebursts=0
+                nibursts=0
+                
+            # Update the continuous dynamics
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist))
+        
         
         tavgs.append(Tmean)
         cavgs.append(CVT2)
@@ -118,29 +238,52 @@ def simulate(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
     biav=np.mean(biav)
     neblistav=np.mean(neblistav)
     niblistav=np.mean(niblistav)
-    return tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, biav, neblistav, niblistav
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #                                                    5      6
+    return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
+        biav, neblistav, niblistav, vavgs, vcv2
+        
+def to_dict(**x):
+    return x
 
-f=50# excitatory frequency
+f=100 # excitatory frequency
 fi=0
-pr=0.2
-pri=0.2
+pr=0.1
+pri=0.1
 M=100
 Mi=100
-k=5
+k=100
 ki=5
 c=0.001
 ci=0.001
 
-tauv=0.05
+tauv=0.01 #0.05
 vth=0.02 # Threshold value
 
 tmax = 10 # <-------------- TMAX
 delta_t = 0.001
 navgs = 1
 
+btype='bin' # bin - binomial, pois - poisson
+lam=5
+lami=5
+
+def cv2vesicle(k, pr, tauv, f, M):
+    return        (2*k**3*(-1 + pr - M*pr)*tauv + f**2*(-2 + pr)*pr**2*(1 + f*pr*tauv) - f*k*pr*(4 + pr*(-3 + 2*M + 2*f*tauv)) + k**2*(-2 + pr*(2 - 2*M + f*(-2 + pr)*tauv)))/(2.*f*k*M*pr*(-2*k + f*(-2 + pr)*pr)*tauv*(1 + k*tauv + f*pr*tauv))
+def cv2iid(tauv,f):
+    return 1/(2*f*tauv)
+# =============================================================================
+# res=sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+# resi=simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+# 
+# =============================================================================
+# print(res[7], res[8])
+# print(resi[5], resi[6])
+
 # Plot trajectories
-tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, biav, neblistav, niblistav = \
-    simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+tlist, nlist, nilist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, biav, neblistav, niblistav, vavg, vcv2 = \
+    sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
 fs=15
 plt.subplot(2,1,1)
 plt.step(tlist, nlist, label='n', where='post')
@@ -169,20 +312,33 @@ print(neblistav, niblistav)
 
 #% Vary parameters
 xlist = np.linspace(0.01, 100,20)
-Fout=np.zeros(len(xlist))
-cv2=np.zeros_like(Fout)
+vmean=np.zeros_like(xlist)
+vcv2=np.zeros_like(xlist)
+vmeaniid=np.zeros_like(xlist)
+vcv2iid=np.zeros_like(xlist)
 for i, x in enumerate(xlist):
     print(i, len(xlist))
-    fi=x
-    res=simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
-    Fout[i]=1/res[7]
-    cv2[i]=res[8]
-    
-fig,ax=plt.subplots(1,2)
-ax[0].plot(Fout)
-ax[1].plot(cv2)
+    f=x
+    res=sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+    resi=simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+
+    vmean[i]=res[13]
+    vcv2[i]=res[14]
+    vmeaniid[i]=resi[11]
+    vcv2iid[i]=resi[12]
+
+fig,ax=plt.subplots(2,1)
+# ax[0].plot(xlist, vmean, label='vmean')
+# ax[0].plot(xlist, vcv2, label='vmeaniid')
+ax[0].plot(xlist, vmeaniid, label='CVv2')
+# ax[0].plot(xlist, cv2vesicle(k, pr, tauv, xlist, M), label='CVv2 eq')
+ax[0].legend()
+# ax[0].set_ylim([0, 0.01])
+ax[1].plot(xlist, vcv2iid, label='CVv2iid')
+# ax[1].plot(xlist, cv2iid(tauv, xlist), label='CVv2iid eq')
+ax[1].legend()
 plt.show()
-    
+
     #%%
     
 fs=20
@@ -230,7 +386,7 @@ for j, fi_val in enumerate(fi_list):
     for i, x in enumerate(xlist):
         print(i, len(xlist), j, len(fi_list))
         tauv = x
-        res = simulate(vth, c, ci, f, fi_val, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        res = sim(vth, c, ci, f, fi_val, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
         Foutj[i] = 1 / res[7]
         cv2j[i] = res[8]
     Fout.append(Foutj)
@@ -291,7 +447,7 @@ cv2=np.zeros_like(Fout)
 for i, f in enumerate(flist):
     for j, fi in enumerate(filist):
         print(i,j)
-        res=simulate(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        res=sim(vth, c, ci, f, fi, k, ki, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
         Fout[i,j]=1/res[7]
         cv2[i,j]=res[8]
 
