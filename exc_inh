@@ -9,7 +9,7 @@ from numpy import log as Log
 import pandas as pd
 
 def sim(vth, c, ci, f, fi, k,ki,pr, pri, M, Mi, tauv,tmax, delta_t, navgs):
-    
+
     tavgs=[]
     cavgs=[]
     vavgs=[]
@@ -426,8 +426,8 @@ M=100
 Mi=100
 k=10
 ki=10
-c=0.003
-ci=0.003
+c=0.001
+ci=0.001
 
 tauv=0.01 #0.05
 vth=0.02 # Threshold value
@@ -441,8 +441,8 @@ lam=5
 lami=5
 
 # Heammap generation
-flist = np.linspace(0,100,20)
-filist=np.linspace(0,100,20)
+flist = np.linspace(0,100,40)
+filist=np.linspace(0,100,40)
 Fout=np.zeros((len(flist), len(filist)))
 cv2=np.zeros_like(Fout)
 for i, f in enumerate(flist):
@@ -452,32 +452,49 @@ for i, f in enumerate(flist):
         Fout[i,j]=1/res[5]
         cv2[i,j]=res[6]
 
-# plot the heatmap
+#%% plot the heatmap
         
+green = 'lightgreen'  # define green once
+
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'inferno'
+fs = 15  # font size
 
-cmap='inferno'
-
-# First plot with its own color scale
+# First plot (Fout)
 im0 = ax[0].imshow(Fout, origin='lower', extent=extent, aspect='auto',
                    vmin=np.nanmin(Fout), vmax=np.nanmax(Fout), cmap=cmap)
-ax[0].set_title('Fout')
-ax[0].set_xlabel('Inhibitory input frequency (Hz)')
-ax[0].set_ylabel('Excitatory input frequency (Hz)')
-fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('                                                                    Inhibitory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Excitatory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
 
-# Second plot with its own color scale
+# Second plot (cv2)
 im1 = ax[1].imshow(cv2, origin='lower', extent=extent, aspect='auto',
                    vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
-ax[1].set_title('Noise')
-ax[1].set_xlabel('Inhibitory input frequency (Hz)')
-ax[1].set_ylabel('Excitatory input frequency (Hz)')
-ax[1].set_yticks([])
-fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # hide y-ticks if desired
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+# Overlay green line where cv2 = 1
+X, Y = np.meshgrid(filist, flist)
+contour = ax[1].contour(X, Y, cv2, levels=[1], colors=[green], linewidths=2)
+
+# Add annotation with arrow pointing to the line
+# Plot the text
+ax[1].text(22, 28, r'$CV_T^2 = 1$', color=green, fontsize=fs+5)
+# Plot an arrow pointing to the line
+ax[1].arrow(22, 26, -3, -5, color=green, width=0.3, head_width=3.0, 
+            head_length=3.0)
+
 
 plt.tight_layout()
 plt.show()
+
 
 
 #%% contour plots
@@ -587,3 +604,104 @@ for i in range(ny):
 
 plt.tight_layout()
 plt.show()
+#%%  Probability calculations fixed threshold
+
+import numpy as np
+from scipy.special import gamma, gammaincc   # gamma function & upper incomplete gamma
+from scipy.integrate import quad
+
+# Parameters
+fi      = 100.0
+tauv    = 0.001
+bimean  = 10.0
+CVb2    = 1
+bi2mean = (1+CVb2)*bimean**2
+
+vmean = fi * tauv * bimean
+CVv2  = bi2mean / (2 * bimean**2 * fi * tauv)
+
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+
+CVBe2  = 1.0
+Bemean = 10.0
+
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+X = 0.02
+
+# Integrand for v in [0, ∞)
+def integrand(v):
+    # 1 - Gamma[aBe, lamBe*(X + v)] / Gamma[aBe]
+    # Gamma[aBe, z] is the upper incomplete gamma
+    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (X + v))
+    return (1 - upper_inc / gamma(aBe)) * (lamv**av / gamma(av)) * v**(av - 1) * np.exp(-lamv * v)
+
+# Numerical integration
+prob, err = quad(integrand, 0, np.inf)
+print("Probability =", prob)
+
+# Simulate the Tout ~ Exp(f*finput)
+
+
+
+
+
+#%% Probability calculations variable threshold
+
+import numpy as np
+from scipy.special import gamma, gammaincc   # complete gamma & regularized upper incomplete gamma
+from scipy.integrate import quad
+
+# Parameters
+fi      = 100.0
+tauv    = 0.001
+bimean  = 10.0
+bimean2 = 100.0
+
+vmean = fi * tauv * bimean
+CVb2    = 1
+bi2mean = (1+CVb2)*bimean**2
+CVv2  = bi2mean / (2 * bimean**2 * fi * tauv)
+
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+
+CVBe2  = 1.0
+Bemean = 10.0
+
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+X0 = 0.02
+y0 = 0.01
+y1 = 0.001
+v1 = -0.1
+
+# Piecewise Y(v)
+def Y(v):
+    if v < -v1:
+        return y0
+    elif -v1 <= v <= 0:
+        return y0 + (v + v1) * (y1 - y0) / v1
+    else:
+        return y1
+
+# X(v) = X0 - Y(v)
+def Xv(v):
+    return X0 - Y(v)
+
+# Integrand
+def integrand(v):
+    # upper incomplete gamma Γ(aBe, z) = Γ(aBe)*gammaincc(...)
+    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (Xv(v) + v))
+    return (1 - upper_inc / gamma(aBe)) * (lamv**av / gamma(av)) * v**(av - 1) * np.exp(-lamv * v)
+
+# Numerical integration
+prob, err = quad(integrand, 0, np.inf)
+print("Probability =", prob)
+
+#%% Simulate the Tout ~ Exp(f*finput)
+
+
