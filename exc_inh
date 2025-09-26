@@ -617,7 +617,7 @@ from scipy.special import gamma, gammaincc   # gamma function & upper incomplete
 from scipy.integrate import quad
 
 # Parameters
-fi      = 100.0
+fi     = 100.0
 tauv    = 0.01
 Bimean  = 0.001
 CVBi2    = 1
@@ -639,7 +639,6 @@ lamv = 1 / CVv2 / vmean
 
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
-
 X = 0.02
 
 # Integrand for v in [0, ∞)
@@ -689,7 +688,7 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
             t2 = timer
 
             if t0<t1 and t0<t2: # AP occurrs
-                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean), size=1) # gamma does
+                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean)) # gamma does
                 # alpha and beta, beta=1/rate = 1/(1/(noise*mean))
                 belist.append(b)
                 v=v+b
@@ -718,7 +717,7 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
             if v>=vth:
                 postlist.append(tcurr)
                 if len(vlist)>0:
-                    vlist[-1]=vth+0.01
+                    vlist[-1]=vth+0.001
                 v=0
                 neblist.append(nebursts)
                 niblist.append(nibursts)
@@ -736,6 +735,203 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
         vavgs.append(np.mean(vlist))
         vcv2.append(np.var(vlist)/np.mean(vlist)**2)
         
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        beav.append(np.mean(belist))
+        biav.append(np.mean(bilist))
+        neblistav.append(np.mean(neblist))
+        niblistav.append(np.mean(niblist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    beav=np.mean(beav)
+    biav=np.mean(biav)
+    neblistav=np.mean(neblistav)
+    niblistav=np.mean(niblistav)
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #        0        1     2        3           4         5     6     7
+    return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
+        biav, neblistav, niblistav, vavgs, vcv2
+        # 8     9           10        11     12
+
+# =============================================================================
+# res=simgam(X, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+# plt.plot(res[0], res[1])
+# plt.plot(res[0], X*np.ones(len(res[0])))
+# plt.show()
+# =============================================================================
+
+
+# Main code run
+
+Bimean  = 0.02
+CVBi2   = 0.01
+
+Bemean = 0.02
+CVBe2  = 0.01
+
+tauv   = 0.01
+X=0.02
+
+tmax=10
+delta_t=0.001
+navgs=1
+
+Bi2mean = (1+CVBi2)*Bimean**2
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+nsamples=40
+flist=np.linspace(0,100,nsamples)
+filist=np.linspace(0,100,nsamples)
+fout=np.zeros((len(flist), len(filist)))
+cv2=np.zeros_like(fout)
+for i, f in enumerate(flist):
+    for j, fi in enumerate(filist):
+        print(i, len(flist), j, len(filist))
+        
+        # Parameters
+        vmean = fi * tauv * Bimean
+        CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
+        av   = 1 / CVv2
+        lamv = 1 / CVv2 / vmean
+
+        res=simgam(X, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+        fout[i,j] = 1/res[5]
+        cv2[i,j] = res[6]
+        
+# Plot the heatmap
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'viridis'
+fs = 15  # font size
+
+# First plot (Fout)
+im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('                                                                    Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# Second plot (cv2)
+im1 = ax[1].imshow(cv2.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # hide y-ticks if desired
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+plt.show()
+
+#%% Fixed threshold with chekcing firing time distribution
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, poisson
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+from scipy.special import gamma, gammaincc   # gamma function & upper incomplete gamma
+from scipy.integrate import quad
+from scipy.stats import expon
+
+# Integrand for v in [0, ∞)
+def integrand(v):
+    # 1 - Gamma[aBe, lamBe*(X + v)] / Gamma[aBe]
+    # Gamma[aBe, z] is the upper incomplete gamma
+    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (X + v))
+    return (1 - upper_inc / gamma(aBe)) * (lamv**av / gamma(av)) * v**(av - 1) * np.exp(-lamv * v)
+
+
+# Simulate the Tout ~ Exp(f*finput)
+def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+    vavgs=[]
+    vcv2=[]
+    ratio = 0.3
+    e=1e-6
+    beav=[] # mean num bursts
+    biav=[]
+    neblistav=[] # num bursts until AP
+    niblistav=[]
+
+    for _ in range(navgs):
+        vlist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        belist=[]
+        bilist=[]
+        nebursts=0
+        nibursts=0
+        neblist=[]
+        niblist=[]
+        v=0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2 = timer
+
+            if t0<t1 and t0<t2: # AP occurrs
+                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean)) # gamma does
+                # alpha and beta, beta=1/rate = 1/(1/(noise*mean))
+                belist.append(b)
+                v=v+b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                nebursts+=1
+                
+            if t1<t0 and t1<t2: # AP occurrs
+                bi = np.random.gamma(1/CVBi2, 1/(1/CVBi2/Bimean))
+                bilist.append(bi)
+                v=v-bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                nibursts+=1
+                
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.001
+                v=0
+                neblist.append(nebursts)
+                niblist.append(nibursts)
+                nebursts=0
+                nibursts=0
+                
+            # Update the continuous dynamics
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
         
         tavgs.append(Tmean)
         cavgs.append(CVT2)
@@ -756,29 +952,37 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
         biav, neblistav, niblistav, vavgs, vcv2
         # 8     9           10        11     12
         
+# Parameters
+f = 100
+fi =100
 
-res=simgam(X, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+M=100
+Mi=100
+k=10
+ki=10
+pr=0.3
+pri=0.2
 
 
 
-#%% Probability calculations variable threshold
+# =============================================================================
+# Bemean = 0.1
+# CVBe2  = 1
+# 
+# Bimean  = 0.01
+# CVBi2    = 1
+# =============================================================================
 
-import numpy as np
-from scipy.special import gamma, gammaincc   # complete gamma & regularized upper incomplete gamma
-from scipy.integrate import quad
+tauv=0.1
+X = 0.02
 
-# parameters
-fi      = 100.0
-tauv    = 0.01
-bimean  = 0.001
-CVb2    = 1
+tmax=100
+delta_t=0.001
+navgs=1
 
-Bemean = 0.01
-CVBe2  = 1
-
-bi2mean = (1+CVb2)*bimean**2
-vmean = fi * tauv * bimean
-CVv2  = bi2mean / (2 * bimean**2 * fi * tauv)
+Bi2mean = (1+CVBi2)*Bimean**2
+vmean = fi * tauv * Bimean
+CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
 
 av   = 1 / CVv2
 lamv = 1 / CVv2 / vmean
@@ -786,33 +990,351 @@ lamv = 1 / CVv2 / vmean
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
-X0 = 0.02
-y0 = 0.01
-y1 = 0.001
-v1 = -0.1
+# From PRL paper
+Bemean=M*k*pr/(k+f*pr)
+Bimean=Mi*ki*pri/(ki+fi*pri)
+CVBe2=1/M*((2*(M-1)*(k+f*pr))/(2*k+f*pr*(2-pr))+f/k-M+1/pr)
+CVBi2=1/Mi*((2*(Mi-1)*(ki+fi*pri))/(2*ki+fi*pri*(2-pri))+fi/ki-Mi+1/pri)
 
-# Piecewise Y(v)
-def Y(v):
-    if v < -v1:
-        return y0
-    elif -v1 <= v <= 0:
-        return y0 + (v + v1) * (y1 - y0) / v1
+# Numerical integration
+prob, err = quad(integrand, 0, np.inf)
+print("Probability =", prob)
+lam=f*prob
+res=simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+intervals = np.diff(res[4])
+counts, bins, _ = plt.hist(intervals, bins=50, density=True, alpha=0.6, color='b', label='data')
+x = np.linspace(0, max(intervals), 100)
+pdf=lam*np.exp(-lam*x)
+plt.plot(x, pdf, 'r', lw=2, label=r'Exponential$( f_{exc} \times P(Be-V>X) )$')
+plt.xlabel('Inter-spike interval')
+plt.ylabel('Density')
+plt.plot([],[],' ', label=r'$f_{{exc}}$={}, $f_{{inh}}$={}'.format(f, fi))
+plt.legend()
+plt.ylim([0, np.max(counts)+1])
+plt.show()
+#%%
+
+# Main code run
+
+Bimean  = 0.02
+CVBi2   = 0.01
+
+Bemean = 0.02
+CVBe2  = 0.01
+
+tauv   = 0.01
+X=0.02
+
+tmax=10
+delta_t=0.001
+navgs=1
+
+Bi2mean = (1+CVBi2)*Bimean**2
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+nsamples=40
+flist=np.linspace(0,100,nsamples)
+filist=np.linspace(0,100,nsamples)
+fout=np.zeros((len(flist), len(filist)))
+cv2=np.zeros_like(fout)
+for i, f in enumerate(flist):
+    for j, fi in enumerate(filist):
+        print(i, len(flist), j, len(filist))
+        
+        # Parameters
+        vmean = fi * tauv * Bimean
+        CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
+        av   = 1 / CVv2
+        lamv = 1 / CVv2 / vmean
+
+        res=simgam(X, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+        fout[i,j] = 1/res[5]
+        cv2[i,j] = res[6]
+        
+# Plot the heatmap
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'viridis'
+fs = 15  # font size
+
+# First plot (Fout)
+im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('                                                                    Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# Second plot (cv2)
+im1 = ax[1].imshow(cv2.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # hide y-ticks if desired
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+plt.show()
+
+#%% Probability calculations variable threshold
+
+def simgamX(vth, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+    vavgs=[]
+    vcv2=[]
+    ratio = 0
+    e=1e-6
+    beav=[] # mean num bursts
+    biav=[]
+    neblistav=[] # num bursts until AP
+    niblistav=[]
+
+    for _ in range(navgs):
+        vlist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        belist=[]
+        bilist=[]
+        nebursts=0
+        nibursts=0
+        neblist=[]
+        niblist=[]
+        vthlist=[]
+        v=0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2 = timer
+
+            if t0<t1 and t0<t2: # AP occurrs
+                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean)) # gamma does
+                # alpha and beta, beta=1/rate = 1/(1/(noise*mean))
+                belist.append(b)
+                v=v+b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                nebursts+=1
+                
+            if t1<t0 and t1<t2: # AP occurrs
+                bi = np.random.gamma(1/CVBi2, 1/(1/CVBi2/Bimean))
+                bilist.append(bi)
+                v=v-bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                nibursts+=1
+                
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    tlist.append(tcurr)
+                    vthlist.append(vth(v, v1, X0, X1))
+                    
+            tcurr += tmin
+            if v>=vth(v, v1, X0, X1):
+                postlist.append(tcurr)
+# =============================================================================
+#                 if len(vlist)>0:
+#                     vlist[-1]=vth(v)+0.001
+# =============================================================================
+                v=0
+                neblist.append(nebursts)
+                niblist.append(nibursts)
+                nebursts=0
+                nibursts=0
+                
+            # Update the continuous dynamics
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        beav.append(np.mean(belist))
+        biav.append(np.mean(bilist))
+        neblistav.append(np.mean(neblist))
+        niblistav.append(np.mean(niblist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    beav=np.mean(beav)
+    biav=np.mean(biav)
+    neblistav=np.mean(neblistav)
+    niblistav=np.mean(niblistav)
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #        0        1     2        3           4         5     6     7
+    return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
+        biav, neblistav, niblistav, vavgs, vcv2, vthlist
+        # 8     9           10        11     12     13
+
+import numpy as np
+from scipy.special import gamma, gammaincc   # complete gamma & regularized upper incomplete gamma
+from scipy.integrate import quad
+
+# parameters
+
+f = 100
+fi = 10
+tauv = 0.01
+
+Bemean = 0.01 # exc depolarization 
+CVBe2  = 0.001
+
+Bimean  = 0.01 # inh hyperpolarization
+CVBi2    = 0.001
+
+bi2mean = (1+CVBi2)*Bimean**2
+vmean = fi * tauv * Bimean
+CVv2  = bi2mean / (2 * Bimean**2 * fi * tauv)
+
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+
+X1 = 0.01 # lower value of vth
+v1=-0.001
+X0 = 0.02 # higher value of vth
+
+# Piecewise function
+def Xv(v, v1, X0, X1):
+    if v < v1:
+        return X1
+    elif v < 0:
+        return X1 + (v - v1) * (X0 - X1) / (0 - v1)
     else:
-        return y1
-
-# X(v) = X0 - Y(v)
-def Xv(v):
-    return X0 - Y(v)
+        return X0
 
 # Integrand
 def integrand(v):
     # upper incomplete gamma Γ(aBe, z) = Γ(aBe)*gammaincc(...)
-    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (Xv(v) + v))
+    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (Xv(v, v1, X0, X1) + v))
     return (1 - upper_inc / gamma(aBe)) * (lamv**av / gamma(av)) * v**(av - 1) * np.exp(-lamv * v)
 
 # Numerical integration
 prob, err = quad(integrand, 0, np.inf)
 print("Probability =", prob)
+
+tmax=1
+delta_t=0.001
+navgs=1
+
+# =============================================================================
+# res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+# plt.plot(res[0], res[1], label='v')
+# plt.plot(res[0], res[13], color='k', label='vth')
+# plt.legend()
+# plt.show()
+# print(1/res[5])
+# #%%  Comment for full code
+# =============================================================================
+
+# Main code 
+
+Bimean  = 0.02
+CVBi2   = 0.01
+
+Bemean = 0.02
+CVBe2  = 0.01
+tauv   = 0.01
+
+tmax=10
+delta_t=0.001
+navgs=1
+
+X1 = 0.01 # lower value of vth for v<v1
+v1=-0.01
+X0 = 0.02 # higher value of vth for v>0
+
+Bi2mean = (1+CVBi2)*Bimean**2
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+    
+nsamples=40
+flist=np.linspace(0,100,nsamples)
+filist=np.linspace(0,100,nsamples)
+fout=np.zeros((len(flist), len(filist)))
+cv2=np.zeros_like(fout)
+for i, f in enumerate(flist):
+    for j, fi in enumerate(filist):
+        print(i, len(flist), j, len(filist))
+        
+        # Parameters
+        vmean = fi * tauv * Bimean
+        CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
+        av   = 1 / CVv2
+        lamv = 1 / CVv2 / vmean
+
+        res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+        fout[i,j] = 1/res[5]
+        cv2[i,j] = res[6]
+        
+# Plot the heatmap vth variable
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'viridis'
+fs = 15  # font size
+
+# First plot (Fout)
+im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('                                                                    Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# Second plot (cv2)
+im1 = ax[1].imshow(cv2.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # hide y-ticks if desired
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+
+# =============================================================================
+# green = 'lightgreen'  # define green once
+# # Overlay green line where cv2 = 1
+# X, Y = np.meshgrid(filist, flist)
+# contour = ax[1].contour(X, Y, cv2, levels=[1], colors=[green], linewidths=2)
+# 
+# # Add annotation with arrow pointing to the line
+# # Plot the text
+# ax[1].text(22, 28, r'$CV_T^2 = 1$', color=green, fontsize=fs+5)
+# # Plot an arrow pointing to the line
+# ax[1].arrow(22, 26, -3, -5, color=green, width=0.3, head_width=3.0, 
+#             head_length=3.0)
+# 
+# =============================================================================
+
+plt.tight_layout()
+plt.show()
+
 
 #%% Simulate the Tout ~ Exp(f*finput)
 
