@@ -602,7 +602,7 @@ for i in range(ny):
 
 plt.tight_layout()
 plt.show()
-#%%  Probability calculations fixed threshold
+#%%  Fout and noise for fixed threshold
 
 import numpy as np
 from matplotlib.pyplot import plot as pt
@@ -763,6 +763,18 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
 
 
 # Main code run
+f = 100
+fi =100
+
+# =============================================================================
+# # From PRL paper
+# M=100
+# Mi=100
+# k=10
+# ki=10
+# pr=0.3
+# pri=0.3
+# =============================================================================
 
 Bimean  = 0.02
 CVBi2   = 0.01
@@ -770,16 +782,18 @@ CVBi2   = 0.01
 Bemean = 0.02
 CVBe2  = 0.01
 
-tauv   = 0.01
+tauv = 0.01
 X=0.02
 
 tmax=10
 delta_t=0.001
 navgs=1
 
+# If not PRL papaer keep this
 Bi2mean = (1+CVBi2)*Bimean**2
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
+
 
 nsamples=40
 flist=np.linspace(0,100,nsamples)
@@ -789,6 +803,14 @@ cv2=np.zeros_like(fout)
 for i, f in enumerate(flist):
     for j, fi in enumerate(filist):
         print(i, len(flist), j, len(filist))
+        
+# =============================================================================
+#         # From PRL paper
+#         Bemean=M*k*pr/(k+f*pr)
+#         Bimean=Mi*ki*pri/(ki+fi*pri)
+#         CVBe2=1/M*((2*(M-1)*(k+f*pr))/(2*k+f*pr*(2-pr))+f/k-M+1/pr)
+#         CVBi2=1/Mi*((2*(Mi-1)*(ki+fi*pri))/(2*ki+fi*pri*(2-pri))+fi/ki-Mi+1/pri)
+# =============================================================================
         
         # Parameters
         vmean = fi * tauv * Bimean
@@ -963,8 +985,6 @@ ki=10
 pr=0.3
 pri=0.2
 
-
-
 # =============================================================================
 # Bemean = 0.1
 # CVBe2  = 1
@@ -972,6 +992,12 @@ pri=0.2
 # Bimean  = 0.01
 # CVBi2    = 1
 # =============================================================================
+
+# From PRL paper
+Bemean=M*k*pr/(k+f*pr)
+Bimean=Mi*ki*pri/(ki+fi*pri)
+CVBe2=1/M*((2*(M-1)*(k+f*pr))/(2*k+f*pr*(2-pr))+f/k-M+1/pr)
+CVBi2=1/Mi*((2*(Mi-1)*(ki+fi*pri))/(2*ki+fi*pri*(2-pri))+fi/ki-Mi+1/pri)
 
 tauv=0.1
 X = 0.02
@@ -990,11 +1016,7 @@ lamv = 1 / CVv2 / vmean
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
-# From PRL paper
-Bemean=M*k*pr/(k+f*pr)
-Bimean=Mi*ki*pri/(ki+fi*pri)
-CVBe2=1/M*((2*(M-1)*(k+f*pr))/(2*k+f*pr*(2-pr))+f/k-M+1/pr)
-CVBi2=1/Mi*((2*(Mi-1)*(ki+fi*pri))/(2*ki+fi*pri*(2-pri))+fi/ki-Mi+1/pri)
+
 
 # Numerical integration
 prob, err = quad(integrand, 0, np.inf)
@@ -1079,7 +1101,7 @@ ax[1].tick_params(axis='both', labelsize=fs)
 
 plt.show()
 
-#%% Probability calculations variable threshold
+#%% Fout and CV2 - VARIABLE threshold
 
 def simgamX(vth, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
 
