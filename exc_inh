@@ -785,9 +785,9 @@ CVBe2  = 0.01
 tauv = 0.01
 X=0.02
 
-tmax=10
+tmax=30
 delta_t=0.001
-navgs=1
+navgs=50
 
 # If not PRL papaer keep this
 Bi2mean = (1+CVBi2)*Bimean**2
@@ -821,18 +821,18 @@ for i, f in enumerate(flist):
         res=simgam(X, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
         fout[i,j] = 1/res[5]
         cv2[i,j] = res[6]
-        
+#%%
 # Plot the heatmap
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
-cmap = 'viridis'
+cmap = 'nipy_spectral'
 fs = 15  # font size
 
 # First plot (Fout)
 im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
                    vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
 ax[0].set_title('Output frequency', fontsize=fs)
-ax[0].set_xlabel('                                                                    Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_xlabel('                                                                   Excitatory input frequency (Hz)', fontsize=fs)
 ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
 cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
 cb0.ax.tick_params(labelsize=fs)
@@ -848,6 +848,44 @@ cb1.ax.tick_params(labelsize=fs)
 ax[1].tick_params(axis='both', labelsize=fs)
 
 plt.show()
+
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Example: define number of contour levels
+n_levels = 20
+
+X, Y = np.meshgrid(filist, flist)  # X = excitatory, Y = inhibitory
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'nipy_spectral'
+fs = 15
+
+# First plot (Fout)
+im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# Second plot (CV) as contour plot
+cs = ax[1].contourf(X, Y, cv2.T, levels=n_levels, cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])
+cb1 = fig.colorbar(cs, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+# Optional: overlay contour lines for better visibility
+cs_lines = ax[1].contour(X, Y, cv2.T, levels=n_levels, colors='black', linewidths=0.5)
+
+plt.show()
+
 
 #%% Fixed threshold with chekcing firing time distribution
 
@@ -879,7 +917,7 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
     cavgs=[]
     vavgs=[]
     vcv2=[]
-    ratio = 0.3
+    ratio = 0
     e=1e-6
     beav=[] # mean num bursts
     biav=[]
@@ -975,34 +1013,19 @@ def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
         # 8     9           10        11     12
         
 # Parameters
-f = 100
-fi =100
+f  = 10 #20
+fi = 10 #100
 
-M=100
-Mi=100
-k=10
-ki=10
-pr=0.3
-pri=0.2
+Bemean = 0.01
+CVBe2  = 0.1
 
-# =============================================================================
-# Bemean = 0.1
-# CVBe2  = 1
-# 
-# Bimean  = 0.01
-# CVBi2    = 1
-# =============================================================================
-
-# From PRL paper
-Bemean=M*k*pr/(k+f*pr)
-Bimean=Mi*ki*pri/(ki+fi*pri)
-CVBe2=1/M*((2*(M-1)*(k+f*pr))/(2*k+f*pr*(2-pr))+f/k-M+1/pr)
-CVBi2=1/Mi*((2*(Mi-1)*(ki+fi*pri))/(2*ki+fi*pri*(2-pri))+fi/ki-Mi+1/pri)
+Bimean = 0.01
+CVBi2  = 1
 
 tauv=0.1
 X = 0.02
 
-tmax=100
+tmax=0.3
 delta_t=0.001
 navgs=1
 
@@ -1016,6 +1039,14 @@ lamv = 1 / CVv2 / vmean
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
+res=simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+
+plt.plot(res[0], res[1])
+plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+plt.show()
+#%%
+
+
 
 
 # Numerical integration
@@ -1024,15 +1055,25 @@ print("Probability =", prob)
 lam=f*prob
 res=simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
 intervals = np.diff(res[4])
-counts, bins, _ = plt.hist(intervals, bins=50, density=True, alpha=0.6, color='b', label='data')
+#%%
+counts, bins, _ = plt.hist(intervals, bins=50, density=True,
+                           color='skyblue',       # lighter color
+                           edgecolor='black',     # distinct outlines
+                           linewidth=1.2,         # thicker edges
+                           label='Inter-spike interval simulations')
+fs=15
 x = np.linspace(0, max(intervals), 100)
 pdf=lam*np.exp(-lam*x)
-plt.plot(x, pdf, 'r', lw=2, label=r'Exponential$( f_{exc} \times P(Be-V>X) )$')
-plt.xlabel('Inter-spike interval')
-plt.ylabel('Density')
+plt.plot(x, pdf, 'r', lw=3, 
+         label=r'Exponential$( f_{exc} \times P(Be-V>X) )$')
+plt.xlabel('Inter-spike interval (sec)', fontsize=fs)
+# plt.ylabel('Counts', fontsize=fs)
+plt.yticks([])
 plt.plot([],[],' ', label=r'$f_{{exc}}$={}, $f_{{inh}}$={}'.format(f, fi))
 plt.legend()
 plt.ylim([0, np.max(counts)+1])
+plt.xlim([-0.01,0.51])
+plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 #%%
 
@@ -1168,10 +1209,8 @@ def simgamX(vth, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, de
             tcurr += tmin
             if v>=vth(v, v1, X0, X1):
                 postlist.append(tcurr)
-# =============================================================================
-#                 if len(vlist)>0:
-#                     vlist[-1]=vth(v)+0.001
-# =============================================================================
+                if len(vlist)>0:
+                    vlist[-1]=vth(v, v1, X0, X1)+0.001
                 v=0
                 neblist.append(nebursts)
                 niblist.append(nibursts)
@@ -1214,14 +1253,14 @@ from scipy.integrate import quad
 
 # parameters
 
-f = 100
+f = 20
 fi = 10
 tauv = 0.01
 
 Bemean = 0.01 # exc depolarization 
 CVBe2  = 0.001
 
-Bimean  = 0.01 # inh hyperpolarization
+Bimean  = 0.001 # inh hyperpolarization
 CVBi2    = 0.001
 
 bi2mean = (1+CVBi2)*Bimean**2
@@ -1234,9 +1273,8 @@ lamv = 1 / CVv2 / vmean
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
-
 X1 = 0.01 # lower value of vth
-v1=-0.001
+v1=-0.01
 X0 = 0.02 # higher value of vth
 
 # Piecewise function
@@ -1262,15 +1300,13 @@ tmax=1
 delta_t=0.001
 navgs=1
 
-# =============================================================================
-# res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
-# plt.plot(res[0], res[1], label='v')
-# plt.plot(res[0], res[13], color='k', label='vth')
-# plt.legend()
-# plt.show()
-# print(1/res[5])
-# #%%  Comment for full code
-# =============================================================================
+res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+plt.plot(res[0], res[1], label='v')
+plt.plot(res[0], res[13], color='k', label='vth')
+plt.legend()
+plt.show()
+print(1/res[5])
+#%%  Comment for full code
 
 # Main code 
 
@@ -1285,8 +1321,8 @@ tmax=10
 delta_t=0.001
 navgs=1
 
-X1 = 0.01 # lower value of vth for v<v1
-v1=-0.01
+X1 = 0.001 # lower value of vth for v<v1
+v1=-0.001
 X0 = 0.02 # higher value of vth for v>0
 
 Bi2mean = (1+CVBi2)*Bimean**2
@@ -1316,7 +1352,7 @@ for i, f in enumerate(flist):
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
-cmap = 'viridis'
+cmap = 'rainbow'
 fs = 15  # font size
 
 # First plot (Fout)
