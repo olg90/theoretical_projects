@@ -1,4 +1,4 @@
-#%% Define the functions for fitting
+#%% Compare the noise in vs 
 import numpy as np
 from matplotlib.pyplot import plot as pt
 import matplotlib.pyplot as plt
@@ -180,7 +180,6 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
                 preliste.append(tcurr+tmin)
                 nebursts+=1
                 
-                
             if t1<t0 and t1<t2: # AP occurrs
                 if btype == 'bin':
                     bi = binomial(Mi, pri)
@@ -244,12 +243,12 @@ def simiid(vth, btype, lam, lami, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delt
         
 def cv2vesicle(k, pr, tauv, f, M):
     return        (2*k**3*(-1 + pr - M*pr)*tauv + f**2*(-2 + pr)*pr**2*(1 + f*pr*tauv) - f*k*pr*(4 + pr*(-3 + 2*M + 2*f*tauv)) + k**2*(-2 + pr*(2 - 2*M + f*(-2 + pr)*tauv)))/(2.*f*k*M*pr*(-2*k + f*(-2 + pr)*pr)*tauv*(1 + k*tauv + f*pr*tauv))
-def cv2iid(tauv,f):
-    return 1/(2*f*tauv)
+def cv2iid(tauv,f, lam):
+    return (1+1/lam)/(2*f*tauv)
 
 f=100 # excitatory frequency
 fi=0
-pr=0.04
+pr=0.2
 pri=0.1
 M=100
 Mi=100
@@ -263,10 +262,10 @@ vth=0.02 # Threshold value
 
 tmax = 10 # <-------------- TMAX
 delta_t = 0.001
-navgs = 10
+navgs = 1
 
-btype='bin' # bin - binomial, pois - poisson
-lam=5
+btype='pois' # bin - binomial, pois - poisson
+lam=10
 lami=5
 
 # =============================================================================
@@ -337,13 +336,60 @@ ax[0].set_xticks([])
 # ax[0].set_ylim([0, 0.001])
 ax[0].legend()
 ax[1].plot(xlist, vcv2iid, label='CVv2iid sim')
-ax[1].plot(xlist, cv2iid(tauv, xlist), label='CVv2iid eq')
+ax[1].plot(xlist, cv2iid(tauv, xlist, lam), label='CVv2iid eq')
 ax[1].legend()
 ax[1].set_xlabel('Input frequency')
 ax[1].set_ylabel(f'CV$v^2$')
 plt.show()
 
+#%% plot just the eqs for each model and approx model
+f=100 # excitatory frequency
+pr=0.001
+M=100
+k=100
+c=0.001
+tauv=0.01 #0.05
+vth=0.02 # Threshold value
+btype='pois' # bin - binomial, pois - poisson
+lam=0.1
 
+# ignore
+lami=0
+pri=0.1
+fi=0
+Mi=100
+ki=5
+ci=0.001
+
+
+fs=15
+plt.plot(xlist, cv2vesicle(k, pr, tauv, xlist, M), label='CVv2 vesc. eq')
+plt.plot(xlist, cv2iid(tauv, xlist, lam), label='CVv2iid eq')
+plt.legend(fontsize=fs)
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Noise',fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylim([0,100])
+plt.show()
+
+
+# =============================================================================
+# # λ from 0.01 to 100 (all positive)
+# lam_list = np.linspace(1, 10, 200)   # linear spacing
+# cv_ves = cv2vesicle(k, pr, tauv, lam_list, M)
+# cv_iid = cv2iid(tauv, lam_list, lam_list)
+# sq_err = (cv_ves - cv_iid)**2
+# 
+# 
+# plt.figure(figsize=(6,4))
+# plt.plot(lam_list, sq_err)
+# plt.xlabel(r'Mean QC, $\langle b_e \rangle$', fontsize=fs)
+# plt.ylabel('Mean squared error', fontsize=fs)
+# plt.tight_layout()
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.show()
+# 
+# =============================================================================
 
 #%%  Check for three different fis for tauv
 
@@ -1144,6 +1190,20 @@ plt.show()
 
 #%% Fout and CV2 - VARIABLE threshold
 
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, poisson
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+from scipy.special import gamma, gammaincc   # gamma function & upper incomplete gamma
+from scipy.integrate import quad
+from scipy.stats import expon
+
+
 def simgamX(vth, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
 
     tavgs=[]
@@ -1246,6 +1306,111 @@ def simgamX(vth, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, de
     return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
         biav, neblistav, niblistav, vavgs, vcv2, vthlist
         # 8     9           10        11     12     13
+        
+def simgamXvth(vth0, v1, X1, X0, tauvth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+    vavgs=[]
+    vcv2=[]
+    ratio = 0
+    e=1e-6
+    beav=[] # mean num bursts
+    biav=[]
+    neblistav=[] # num bursts until AP
+    niblistav=[]
+
+    for _ in range(navgs):
+        vlist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        belist=[]
+        bilist=[]
+        nebursts=0
+        nibursts=0
+        neblist=[]
+        niblist=[]
+        vthlist=[]
+        v=0
+        vth=X0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2 = timer
+
+            if t0<t1 and t0<t2: # AP occurrs
+                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean)) # gamma does
+                # alpha and beta, beta=1/rate = 1/(1/(noise*mean))
+                belist.append(b)
+                v=v+b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                nebursts+=1
+                
+            if t1<t0 and t1<t2: # AP occurrs
+                bi = np.random.gamma(1/CVBi2, 1/(1/CVBi2/Bimean))
+                bilist.append(bi)
+                v=v-bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                nibursts+=1
+                
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    tlist.append(tcurr)
+                    vthlist.append(vth)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.001
+                v=0
+                neblist.append(nebursts)
+                niblist.append(nibursts)
+                nebursts=0
+                nibursts=0
+                
+            # Update the continuous dynamics
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+                vth += (vth0(v, v1, X0, X1)-vth)/tauvth*tmin
+                
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        beav.append(np.mean(belist))
+        biav.append(np.mean(bilist))
+        neblistav.append(np.mean(neblist))
+        niblistav.append(np.mean(niblist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    beav=np.mean(beav)
+    biav=np.mean(biav)
+    neblistav=np.mean(neblistav)
+    niblistav=np.mean(niblistav)
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #        0        1     2        3           4         5     6     7
+    return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
+        biav, neblistav, niblistav, vavgs, vcv2, vthlist
+        # 8     9           10        11     12     13
 
 import numpy as np
 from scipy.special import gamma, gammaincc   # complete gamma & regularized upper incomplete gamma
@@ -1274,8 +1439,10 @@ aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
 X1 = 0.01 # lower value of vth
-v1=-0.01
+v1=-0.001
 X0 = 0.02 # higher value of vth
+
+tauvth=0.01
 
 # Piecewise function
 def Xv(v, v1, X0, X1):
@@ -1285,6 +1452,13 @@ def Xv(v, v1, X0, X1):
         return X1 + (v - v1) * (X0 - X1) / (0 - v1)
     else:
         return X0
+    
+xout=[]
+vlist2=np.linspace(-0.05,0.02,100)
+for v in vlist2:
+    xout.append(Xv(v,v1,X0,X1))
+plt.plot(vlist2,xout)
+plt.show()
 
 # Integrand
 def integrand(v):
@@ -1296,17 +1470,22 @@ def integrand(v):
 prob, err = quad(integrand, 0, np.inf)
 print("Probability =", prob)
 
-tmax=1
+tmax=30
 delta_t=0.001
-navgs=1
+navgs=10
 
-res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
-plt.plot(res[0], res[1], label='v')
-plt.plot(res[0], res[13], color='k', label='vth')
-plt.legend()
-plt.show()
-print(1/res[5])
-#%%  Comment for full code
+# res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+res=simgamXvth(Xv, v1, X1, X0, tauvth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+
+# =============================================================================
+# plt.figure()
+# plt.plot(res[0], res[1], label='v')
+# plt.plot(res[0], res[13], color='k', label='vth')
+# plt.legend()
+# plt.show()
+# print(1/res[5])
+# #%%  Comment for full code
+# =============================================================================
 
 # Main code 
 
@@ -1317,13 +1496,15 @@ Bemean = 0.02
 CVBe2  = 0.01
 tauv   = 0.01
 
-tmax=10
+tmax=30
 delta_t=0.001
-navgs=1
+navgs=50
 
 X1 = 0.001 # lower value of vth for v<v1
 v1=-0.001
 X0 = 0.02 # higher value of vth for v>0
+
+tauvth=0.01
 
 Bi2mean = (1+CVBi2)*Bimean**2
 aBe   = 1 / CVBe2
@@ -1344,15 +1525,18 @@ for i, f in enumerate(flist):
         av   = 1 / CVv2
         lamv = 1 / CVv2 / vmean
 
-        res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+        # res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+        res = res=simgamXvth(Xv, v1, X1, X0, tauvth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
         fout[i,j] = 1/res[5]
         cv2[i,j] = res[6]
         
+        
+#%%
 # Plot the heatmap vth variable
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
-cmap = 'rainbow'
+cmap = 'nipy_spectral'
 fs = 15  # font size
 
 # First plot (Fout)
@@ -1389,6 +1573,54 @@ ax[1].tick_params(axis='both', labelsize=fs)
 #             head_length=3.0)
 # 
 # =============================================================================
+
+plt.tight_layout()
+plt.show()
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Example: filist, flist, fout, cv2 should already be defined
+# filist = excitatory input frequencies
+# flist = inhibitory input frequencies
+# fout = output frequency matrix
+# cv2 = CV^2 matrix
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'rainbow'
+fs = 15  # font size
+
+# -----------------------------
+# First plot: Fout
+im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# -----------------------------
+# Second plot: CV^2
+im1 = ax[1].imshow(cv2.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # optional: hide y-ticks
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+# -----------------------------
+# Overlay green line where cv2 = 1
+green = 'lightgreen'
+X, Y = np.meshgrid(filist, flist)
+contour = ax[1].contour(X, Y, cv2.T, levels=[1], colors=[green], linewidths=2)
+
+# Optional annotation
+ax[1].text(22, 28, r'$CV_T^2 = 1$', color=green, fontsize=fs+5)
+ax[1].arrow(22, 26, -3, -5, color=green, width=0.3, head_width=3.0, head_length=3.0)
 
 plt.tight_layout()
 plt.show()
