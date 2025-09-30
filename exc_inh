@@ -344,14 +344,14 @@ plt.show()
 
 #%% plot just the eqs for each model and approx model
 f=100 # excitatory frequency
-pr=0.001
+pr=0.1
 M=100
 k=100
 c=0.001
 tauv=0.01 #0.05
 vth=0.02 # Threshold value
 btype='pois' # bin - binomial, pois - poisson
-lam=0.1
+lam=100
 
 # ignore
 lami=0
@@ -828,12 +828,12 @@ CVBi2   = 0.01
 Bemean = 0.02
 CVBe2  = 0.01
 
-tauv = 0.01
+tauv = np.inf
 X=0.02
 
 tmax=30
 delta_t=0.001
-navgs=50
+navgs=10
 
 # If not PRL papaer keep this
 Bi2mean = (1+CVBi2)*Bimean**2
@@ -894,6 +894,48 @@ cb1.ax.tick_params(labelsize=fs)
 ax[1].tick_params(axis='both', labelsize=fs)
 
 plt.show()
+
+#%%  threshold
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Example thresholds
+threshold_fout = 100.0   # anything above this will be NaN
+threshold_cv2 = 0    # anything above this will be NaN
+
+# Mask values above the threshold
+fout_plot = np.where(fout > threshold_fout, np.nan, fout)
+cv2_plot = np.where(cv2 > threshold_cv2, np.nan, cv2)
+
+# Plot the heatmap
+fig, ax = plt.subplots(1, 2, figsize=(10, 4))
+extent = [filist[0], filist[-1], flist[0], flist[-1]]
+cmap = 'nipy_spectral'
+fs = 15  # font size
+
+# First plot (Fout)
+im0 = ax[0].imshow(fout_plot.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(fout_plot), vmax=np.nanmax(fout_plot), cmap=cmap)
+ax[0].set_title('Output frequency', fontsize=fs)
+ax[0].set_xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
+cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0.ax.tick_params(labelsize=fs)
+ax[0].tick_params(axis='both', labelsize=fs)
+
+# Second plot (cv2)
+im1 = ax[1].imshow(cv2_plot.T, origin='lower', extent=extent, aspect='auto',
+                   vmin=np.nanmin(cv2_plot), vmax=np.nanmax(cv2_plot), cmap=cmap)
+ax[1].set_title('Noise in ISI', fontsize=fs)
+ax[1].set_yticks([])  # hide y-ticks if desired
+cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1.ax.tick_params(labelsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+
+plt.show()
+
+
 
 #%%
 import numpy as np
@@ -1418,11 +1460,11 @@ from scipy.integrate import quad
 
 # parameters
 
-f = 20
+f = 10
 fi = 10
 tauv = 0.01
 
-Bemean = 0.01 # exc depolarization 
+Bemean = 0.013 # exc depolarization 
 CVBe2  = 0.001
 
 Bimean  = 0.001 # inh hyperpolarization
@@ -1438,11 +1480,11 @@ lamv = 1 / CVv2 / vmean
 aBe   = 1 / CVBe2
 lamBe = 1 / CVBe2 / Bemean
 
-X1 = 0.01 # lower value of vth
+X1 = 0.001 # lower value of vth
 v1=-0.001
 X0 = 0.02 # higher value of vth
 
-tauvth=0.01
+tauvth=0.007
 
 # Piecewise function
 def Xv(v, v1, X0, X1):
@@ -1454,7 +1496,7 @@ def Xv(v, v1, X0, X1):
         return X0
     
 xout=[]
-vlist2=np.linspace(-0.05,0.02,100)
+vlist2=np.linspace(-0.002,0.001,100)
 for v in vlist2:
     xout.append(Xv(v,v1,X0,X1))
 plt.plot(vlist2,xout)
@@ -1470,22 +1512,20 @@ def integrand(v):
 prob, err = quad(integrand, 0, np.inf)
 print("Probability =", prob)
 
-tmax=30
+tmax=0.3
 delta_t=0.001
-navgs=10
+navgs=1
 
 # res=simgamX(Xv, v1, X1, X0, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
 res=simgamXvth(Xv, v1, X1, X0, tauvth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
 
-# =============================================================================
-# plt.figure()
-# plt.plot(res[0], res[1], label='v')
-# plt.plot(res[0], res[13], color='k', label='vth')
-# plt.legend()
-# plt.show()
-# print(1/res[5])
-# #%%  Comment for full code
-# =============================================================================
+plt.figure()
+plt.plot(res[0], res[1], label='v')
+plt.plot(res[0], res[13], color='k', label='vth')
+plt.legend()
+plt.show()
+print(1/res[5])
+#%%  Comment for full code
 
 # Main code 
 
@@ -1536,7 +1576,7 @@ for i, f in enumerate(flist):
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 extent = [filist[0], filist[-1], flist[0], flist[-1]]
-cmap = 'nipy_spectral'
+cmap = 'turbo'
 fs = 15  # font size
 
 # First plot (Fout)
@@ -1577,48 +1617,45 @@ ax[1].tick_params(axis='both', labelsize=fs)
 plt.tight_layout()
 plt.show()
 #%%
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Example: filist, flist, fout, cv2 should already be defined
-# filist = excitatory input frequencies
-# flist = inhibitory input frequencies
-# fout = output frequency matrix
-# cv2 = CV^2 matrix
-
 fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-extent = [filist[0], filist[-1], flist[0], flist[-1]]
-cmap = 'rainbow'
 fs = 15  # font size
+cmap = 'hot'
 
 # -----------------------------
-# First plot: Fout
-im0 = ax[0].imshow(fout.T, origin='lower', extent=extent, aspect='auto',
-                   vmin=np.nanmin(fout), vmax=np.nanmax(fout), cmap=cmap)
+# First plot: Fout as contour
+levels_fout = 20  # number of contour levels
+X, Y = np.meshgrid(filist, flist)
+cf0 = ax[0].contourf(X, Y, fout.T, levels=levels_fout, cmap=cmap)
+# add black contour lines
+cs0 = ax[0].contour(X, Y, fout.T, levels=levels_fout, colors='k', linewidths=0.5)
+
 ax[0].set_title('Output frequency', fontsize=fs)
 ax[0].set_xlabel('Excitatory input frequency (Hz)', fontsize=fs)
 ax[0].set_ylabel('Inhibitory input frequency (Hz)', fontsize=fs)
-cb0 = fig.colorbar(im0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
+cb0 = fig.colorbar(cf0, ax=ax[0], shrink=1.0, aspect=40, pad=0.02)
 cb0.ax.tick_params(labelsize=fs)
 ax[0].tick_params(axis='both', labelsize=fs)
 
 # -----------------------------
-# Second plot: CV^2
-im1 = ax[1].imshow(cv2.T, origin='lower', extent=extent, aspect='auto',
-                   vmin=np.nanmin(cv2), vmax=np.nanmax(cv2), cmap=cmap)
+# Second plot: CV^2 as contour
+levels_cv2 = 20
+cf1 = ax[1].contourf(X, Y, cv2.T, levels=levels_cv2, cmap=cmap)
+cs1 = ax[1].contour(X, Y, cv2.T, levels=levels_cv2, colors='k', linewidths=0.5)
+
 ax[1].set_title('Noise in ISI', fontsize=fs)
 ax[1].set_yticks([])  # optional: hide y-ticks
-cb1 = fig.colorbar(im1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
+cb1 = fig.colorbar(cf1, ax=ax[1], shrink=1.0, aspect=40, pad=0.02)
 cb1.ax.tick_params(labelsize=fs)
 ax[1].tick_params(axis='both', labelsize=fs)
 
 # -----------------------------
 # Overlay green line where cv2 = 1
 green = 'lightgreen'
-X, Y = np.meshgrid(filist, flist)
-contour = ax[1].contour(X, Y, cv2.T, levels=[1], colors=[green], linewidths=2)
-
-# Optional annotation
+ax[1].contour(X, Y, cv2.T, levels=[1], colors=[green], linewidths=2)
 ax[1].text(22, 28, r'$CV_T^2 = 1$', color=green, fontsize=fs+5)
 ax[1].arrow(22, 26, -3, -5, color=green, width=0.3, head_width=3.0, head_length=3.0)
 
@@ -1626,6 +1663,40 @@ plt.tight_layout()
 plt.show()
 
 
-#%% Simulate the Tout ~ Exp(f*finput)
+
+#%% Plot the output Fout
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Parameters
+v_th = 0.02       # threshold voltage
+Be = 0.02         # mean excitatory increment
+Bi = 0.02         # mean inhibitory decrement
+
+# Frequency ranges
+f_e = np.linspace(0, 100, 200)
+f_i = np.linspace(0, 100, 200)
+
+# Create grid
+F_e, F_i = np.meshgrid(f_e, f_i)
+
+# Inverse function: y = (f_e * <Be> - f_i * <Bi>) / v_th
+Y = (F_e * Be - F_i * Bi) / v_th
+
+# Mask negative values
+Y_masked = np.ma.masked_where(Y <= 0, Y)
+
+# Plot
+plt.figure(figsize=(6, 5))
+cp = plt.contourf(F_e, F_i, Y_masked, levels=50, cmap="nipy_spectral")
+fs=15
+plt.colorbar(cp)
+plt.xlabel("Excitatory input frequency", fontsize=fs)
+plt.ylabel("Inhibitory input frequency", fontsize=fs)
+plt.title("Output frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
 
 
