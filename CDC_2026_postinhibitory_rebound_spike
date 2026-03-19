@@ -1,0 +1,257 @@
+#%% Define the functions for fitting
+
+# KLVT channels reduce the excitability of the postsynaptic neuron
+# Hyperpolarization increases the excitability of the postsynaptic neuron
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+
+def simulate(vth0, c, f, pr, M, tauv, tauvth, vthmin, vmin, tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        
+        tcurr=0
+        ratio = 0.3 #.3
+        timer = delta_t
+        e=1e-6
+        v=0
+        vth=vth0
+        
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1 = timer
+
+            if t0 < t1: # AP occurrs
+                b = binomial(M, pr)
+                v=v-c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            else: # an inhibition event occurs
+                tmin=t1
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+# =============================================================================
+#                 if len(vlist)>0:
+#                     vlist[-1]=vth
+# =============================================================================
+
+            # Update the continuous dynamics
+
+            v += (-v / tauv) * tmin
+            # print(v, vth0, vthmin, vmin)
+            vth += (vthmax(v, vth0, vthmin, vmin)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, postlist, Tmean, CVT2
+
+def vthmax(v, vthb, vthmin, vmin):
+    if v >= 0:
+        return vthb
+    if v<0 and v>=vmin:
+        return vthmin + (vthb - vthmin) * (v - vmin) / (0 - vmin)
+    if v<vmin:
+        return vthmin
+        
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+pr=0.05
+M=20
+c=0.02
+
+tauv=0.01
+tauvth=0.02
+vth=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04 # Threshold infinite value
+
+tmax = 0.2 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 1
+
+res = simulate(vth, c, f, pr, M, tauv, tauvth, vthmin, vmin, tmax, delta_t, navgs)
+fs=15
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[1]), label='membrane potential')
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[2]), label='threshold potential')
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Membrane potential (mV)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+# =============================================================================
+# for x in res[4]:
+#     plt.axvline(x, color='r')
+# =============================================================================
+plt.legend()
+plt.show()
+print(1/res[5])
+#%% Plot fout and noise as a function of tauv
+
+f=100 # 300 # excitatory frequency
+pr=0.05
+M=20
+c=0.02
+
+tauv=0.01
+tauvth=0.02
+vth=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04 # Threshold infinite value
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 10
+
+xlist = np.linspace(1e-6, tauvth+0.05, 100)
+foutlist=[]
+noise=[]
+for i,x in enumerate(xlist):
+    print(i, len(xlist))
+    tauv=x
+    res = simulate(vth, c, f, pr, M, tauv, tauvth, vthmin, vmin, tmax, delta_t, navgs)
+    foutlist.append(1/res[5])
+    noise.append(res[6])
+
+plt.figure()
+plt.plot(xlist, foutlist)
+plt.ylabel('Output frequency')
+plt.xlabel(r'Membrane time constant, $\tau_{v}$')
+plt.show()
+
+plt.figure()
+plt.plot(xlist, noise)
+plt.ylabel('CV^2')
+plt.xlabel(r'Membrane time constant, $\tau_{v}$')
+plt.tight_layout()
+plt.show()
+
+#%%  fout vs (tauvth and tauv)
+
+# ===== PARAMETER SWEEP RANGES =====
+# =============================================================================
+# tauv_vals   = np.linspace(0.001, 0.06, 40)
+# tauvth_vals = np.linspace(0.001, 0.2, 40)
+# =============================================================================
+
+tauv_vals   = np.linspace(0.001, 0.1, 40)
+tauvth_vals = np.linspace(0.001, 0.1, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+
+# ===== FIXED MODEL PARAMS =====
+f=100 # 300 # excitatory frequency
+pr=0.05
+M=20
+c=0.02
+
+tauv=0.01
+tauvth=0.02
+vthb=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04 # Threshold infinite value
+
+tmax = 10
+delta_t = 1e-4
+navgs = 5
+
+# ===== GRID SIMULATION =====
+ct  = len(tauvth_vals)*len(tauv_vals)
+cti=0
+for i, tauvth in enumerate(tauvth_vals):
+    for j, tauv in enumerate(tauv_vals):
+        cti+=1
+
+        print(f"tauvth {i+1}/{len(tauvth_vals)}  tauv {j+1}/{len(tauv_vals)} percentage {cti/ct}")
+
+        res = simulate(vthb, c, f, pr, M, tauv, tauvth,
+                       vthmin, vmin, tmax, delta_t, navgs)
+
+        Tmean = res[5]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+
+#%% Heatmap
+# =============================================================================
+# import os
+# os.chdir(r'C:\Users\Oliver\Desktop\Research\inhibition_new_project')
+# fout_map = np.load('fout_map.npy')
+# =============================================================================
+
+fs = 15
+plt.figure(figsize=(7,5))
+
+im = plt.imshow(
+    fout_map,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+            1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+)
+
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Membrane time constant, $\tau_v$ (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant, $\tau_{vth}$ (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Contours
+
+Tauv, Tauvth = np.meshgrid(tauv_vals, tauvth_vals)
+
+plt.figure(figsize=(7,5))
+
+levels = np.linspace(np.nanmin(fout_map), np.nanmax(fout_map), 100
+                     )
+
+cf = plt.contourf(
+    Tauv,
+    Tauvth,
+    fout_map,
+    levels=levels,
+    cmap='nipy_spectral'
+)
+
+plt.colorbar(cf, label="Output firing rate (Hz)")
+plt.xlabel(r"Membrane time constant $\tau_v$")
+plt.ylabel(r"Threshold time constant $\tau_{vth}$")
+plt.title("Output firing rate contour map")
+plt.tight_layout()
+plt.show()
+
