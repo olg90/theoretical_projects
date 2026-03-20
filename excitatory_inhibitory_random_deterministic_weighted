@@ -13,7 +13,7 @@ from numpy import log as Log
 import pandas as pd
 
 
-def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs):
+def simulate(d, vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs):
     
     tavgs=[]
     cavgs=[]
@@ -31,8 +31,9 @@ def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navg
         tcurr=0
         ratio = 0#.3
         timer = delta_t
+        offset = (d % 1.0)/(f+e)
         aptimer = (1-r)/(f+e)+r*exponential(1/(f+e))
-        aptimeri = (1-ri)/(fi+e)+ri*exponential(1/(fi+e))
+        aptimeri = (1-ri)/(fi+e)+ri*exponential(1/(fi+e))+offset
         v=0
         while tcurr < tmax:
             
@@ -50,7 +51,7 @@ def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navg
                 v=v+c*b-ci*bi
                 tmin = t0
                 aptimer = (1-r)/f+r*exponential(1/(f+e))
-                aptimeri = (1-r)/f+r*exponential(1/(f+e))
+                aptimeri = (1-ri)/fi+ri*exponential(1/(fi+e))+offset
                 timer-=tmin
                 prelist.append(tcurr+tmin)
                 prelisti.append(tcurr+tmin)
@@ -69,7 +70,7 @@ def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navg
                 bi = binomial(Mi, pri)
                 v=v-ci*bi
                 tmin = t1
-                aptimeri = (1-ri)/fi+ri*exponential(1/(fi+e))
+                aptimeri = (1-ri)/fi+ri*exponential(1/(fi+e))+d/(f+e)
                 aptimer-=tmin
                 timer-=tmin
                 prelisti.append(tcurr+tmin)
@@ -110,6 +111,7 @@ M=20
 Mi=20
 c=0.005
 ci=0.005
+d = 0
 
 tauv=0.01
 vth=0.02 # Threshold value
@@ -120,7 +122,7 @@ tmax = 1 # <-------------- TMAX
 delta_t = 1e-3
 navgs = 10
 
-res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs)
+res = simulate(d, vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs)
 plt.plot(res[0], res[1], label='membrane potential')
 plt.plot(res[0], res[2], label='threshold potential')
 plt.xlabel('Time (sec)')
