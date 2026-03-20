@@ -1,0 +1,241 @@
+#%% Define the functions for fitting
+
+# KLVT channels reduce the excitability of the postsynaptic neuron
+# Hyperpolarization increases the excitability of the postsynaptic neuron
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+
+def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+        
+        e=1e-9
+        tcurr=0
+        ratio = 0#.3
+        timer = delta_t
+        aptimer = (1-r)/(f+e)+r*exponential(1/(f+e))
+        aptimeri = (1-ri)/(fi+e)+ri*exponential(1/(fi+e))
+        v=0
+        while tcurr < tmax:
+            
+            t0=aptimer
+            t1=aptimeri
+            t2=timer
+            
+            print(t0, t1, t2)
+            
+            
+            if t0==t1 and t0<t2 and t1<t2: # AP occurrs
+                print('1')
+                b = binomial(M, pr)
+                bi = binomial(Mi, pri)
+                v=v+c*b-ci*bi
+                tmin = t0
+                aptimer = (1-r)/f+r*exponential(1/(f+e))
+                aptimeri = (1-r)/f+r*exponential(1/(f+e))
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                prelisti.append(tcurr+tmin)
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                print('1')
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                aptimer = (1-r)/f+r*exponential(1/(f+e))
+                aptimeri-=tmin
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                aptimeri = (1-ri)/fi+ri*exponential(1/(fi+e))
+                aptimer-=tmin
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                aptimer-=tmin
+                aptimeri-=tmin
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                
+            v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.1
+pri=0.1
+M=20
+Mi=20
+c=0.005
+ci=0.005
+
+tauv=0.01
+vth=0.02 # Threshold value
+r=0
+ri=0
+
+tmax = 1 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 10
+
+res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, r, ri, tmax, delta_t, navgs)
+plt.plot(res[0], res[1], label='membrane potential')
+plt.plot(res[0], res[2], label='threshold potential')
+plt.xlabel('Time (sec)')
+plt.ylabel('Membrane potential (Volts)')
+# =============================================================================
+# for x in res[4]:
+#     plt.axvline(x, color='r')
+# =============================================================================
+plt.legend()
+plt.show()
+print(1/res[6])
+#%% Fout and CV2 as a function of x
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+pr=0.05
+M=20
+c=0.01
+
+tauv=0.01
+vth=0.02 # Threshold value
+
+tmax = 30# <-------------- TMAX
+delta_t = 1e-3
+navgs = 30
+
+# xlist = np.linspace(1e-3, 0.16, 100)
+xlist=np.linspace(0,1,100)
+foutlist=[]
+noise=[]
+for i,x in enumerate(xlist):
+    print(i, len(xlist))
+    # tauv=x
+    # f=x
+    r = x
+    res = simulate(vth, c, f, pr, M, tauv, r, tmax, delta_t, navgs)
+    foutlist.append(1/res[5])
+    noise.append(res[6])
+
+plt.figure()
+plt.plot(xlist, foutlist)
+plt.ylabel('Mean postsynaptic firing frequency')
+plt.xlabel(r'Input')
+plt.show()
+
+plt.figure()
+plt.plot(xlist, noise)
+plt.ylabel('CV^2')
+plt.xlabel('Input')
+plt.tight_layout()
+plt.show()
+
+#%% Calculate Fout vs (r and tauv)
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+pr=0.05
+M=20
+c=0.01
+
+tauv=0.01
+vth=0.02 # Threshold value
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 10
+
+# xlist = np.linspace(1e-3, 0.16, 100)
+xlist=np.linspace(0,1,40)
+ylist=np.linspace(1e-3,100e-3,40)
+foutlist=np.zeros((len(xlist),len(ylist)))
+noise=np.zeros_like(foutlist)
+for i,x in enumerate(xlist):
+        for j,y in enumerate(ylist):
+            print(i, len(xlist), j, len(ylist))
+            # tauv=x
+            # f=x
+            r = x
+            tauv = y 
+            res = simulate(vth, c, f, pr, M, tauv, r, tmax, delta_t, navgs)
+            foutlist[j,i]=1/res[5]
+            noise[j,i] = res[6]
+
+#%%  Plot Fout vs (r and tauv)
+fs = 10
+plt.figure(figsize=(7,2.5))
+plt.subplot(1,2,1)
+im1 =plt.imshow(foutlist, cmap='nipy_spectral',
+           origin='lower',
+           aspect='auto',
+           extent=[xlist[0], xlist[-1],
+                   1000*ylist[0], 1000*ylist[-1]]
+       )
+
+cbar = plt.colorbar(im1)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Randomness", fontsize=fs)
+plt.ylabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+
+plt.subplot(1,2,2)
+im2=plt.imshow(noise, cmap='nipy_spectral', 
+           origin='lower',
+           aspect='auto',
+           extent=[xlist[0], xlist[-1],
+                   1000*ylist[0], 1000*ylist[-1]]
+       )
+cbar = plt.colorbar(im2)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Randomness", fontsize=fs)
+plt.title("Noise in the ISI", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.show()
