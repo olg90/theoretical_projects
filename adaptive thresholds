@@ -1,0 +1,3030 @@
+#%% Fixed threshold EI model
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+        
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        tlist.append(0)
+        vlist.append(0)
+        vthlist.append(vth)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else:
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                if tcurr>ratio*tmax:
+                    postlist.append(tcurr)
+                v=0
+                vlist[-1]=vth+0.001
+
+            if tauv!=np.inf and tauv!=0:
+                v += (-v / tauv) * tmin
+            if tauv==0:
+                v=0
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist[1:], vlist[1:], vthlist[1:], prelist, prelisti, postlist, Tmean, CVT2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.1
+pri=0.1
+M=100
+Mi=100
+c=0.002
+ci=0.002
+
+tauv=0.005*0
+vth=0.02 # Threshold value
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 1
+
+res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+
+# =============================================================================
+# #%% Plot
+# =============================================================================
+fs=15
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[1]), label='membrane potential')
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[2]), label='threshold potential')
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Membrane potential (mV)', fontsize=fs)
+plt.title('fout = {}'.format(np.around(1/res[6], 3)), fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+
+# =============================================================================
+# for z in res[3]:
+#     plt.axvline(1000*z, color='r', alpha=0.5)
+# for z in res[4]:
+#     plt.axvline(1000*z, color='b', alpha=0.5)
+# plt.show()
+# =============================================================================
+
+#%% Fixed threshold mean and noise
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+vth=0.01 # Threshold value
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 10
+
+flist=np.linspace(1,50,20)
+mean=[]
+cv=[]
+for i,f in enumerate(flist):
+    print(i, len(flist))
+    res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+    mean.append(1/res[6])
+    cv.append(res[7])
+
+plt.subplot(1,2,1)
+plt.plot(flist, mean)
+plt.subplot(1,2,2)
+plt.plot(flist,cv)
+
+plt.show()
+
+
+#%%  Adaptive threshold - negative
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+
+def sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, vmin, vthmin, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+
+            # Update the continuous dynamics
+            
+            if tauv!=0:
+                v += (-v / tauv) * tmin
+            else:
+                v=0
+            vth += (vthmax(v, vth0, vthmin, vmin)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+
+def vthmax(v, vth0, vthmin, vmin):
+    if v >= 0:
+        return vth0
+    elif v <= vmin:
+        return vthmin
+    else:
+        return vthmin + (vth0 - vthmin) * (v - vmin) / (0 - vmin)
+
+f=100*0 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vthb=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 10
+
+res = sima(vthb, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+
+
+fs=15
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[1]), label='membrane potential')
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[2]), label='threshold potential')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Membrane potential (Volts)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+# =============================================================================
+# for x in res[4]:
+#     plt.axvline(x, color='r')
+# =============================================================================
+
+plt.legend()
+plt.show()
+
+# =============================================================================
+# plt.figure()
+# for z in res[3]:
+#     plt.axvline(z, color='r', alpha=0.5)
+# for z in res[4]:
+#     plt.axvline(z, color='b', alpha=0.5)
+# plt.show()
+# =============================================================================
+
+#%% Fout and CV2 vs f - negative
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vthb=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+# =============================================================================
+# tmax = 20 # <-------------- TMAX
+# delta_t = 1e-3
+# navgs = 100
+# =============================================================================
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+flist=[0, 10, 20]
+filist=np.linspace(1,500,100)
+
+fouts=[]
+noises=[]
+for j, f in enumerate(flist):
+    foutlist=[]
+    noise=[]
+    for i,fi in enumerate(filist):
+        print(j , len(flist), i, len(filist))
+        res = sima(vthb, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+        foutlist.append(1/res[6])
+        noise.append(res[7])
+    fouts.append(foutlist)
+    noises.append(noise)
+    
+# =============================================================================
+# #%% Plot negative
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+for i, x in enumerate(fouts):
+    plt.plot(filist, x, label=flist[i])
+plt.legend()
+plt.xlabel('Inhibitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Mean postsynaptic\nfiring frequency (Hz)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.subplot(1,2,2)
+for i,x in enumerate(noises):
+    plt.plot(filist, x, label=flist[i])
+plt.legend()
+plt.xlabel('Inhibitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('ISI noise', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Fout and CV2 vs x - negative
+
+f=100*0 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vthb=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+# =============================================================================
+# tmax = 20 # <-------------- TMAX
+# delta_t = 1e-3
+# navgs = 100
+# =============================================================================
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+xlist=[0, 10, 20]
+filist=np.linspace(1,500,100)
+
+fouts=[]
+noises=[]
+for j, x in enumerate(xlist):
+    foutlist=[]
+    noise=[]
+    for i,fi in enumerate(filist):
+        print(j , len(xlist), i, len(filist))
+        f=x
+        res = sima(vthb, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+        foutlist.append(1/res[6])
+        noise.append(res[7])
+    fouts.append(foutlist)
+    noises.append(noise)
+
+# =============================================================================
+# #%% Plot negative
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+for i, x in enumerate(fouts):
+    plt.plot(filist, x, label=xlist[i])
+plt.legend()
+plt.xlabel('Inhibitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Mean postsynaptic\nfiring frequency (Hz)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.subplot(1,2,2)
+for i,x in enumerate(noises):
+    plt.plot(filist, x, label=xlist[i])
+plt.legend()
+plt.xlabel('Inhibitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('ISI noise', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Fout vs (tauv and tauvth) negative
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+
+def sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, vmin, vthmin, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+
+            # Update the continuous dynamics
+            
+            if tauv!=0:
+                v += (-v / tauv) * tmin
+            else:
+                v=0
+            vth += (vthmax(v, vth0, vthmin, vmin)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+
+def vthmax(v, vth0, vthmin, vmin):
+    if v >= 0:
+        return vth0
+    elif v <= vmin:
+        return vthmin
+    else:
+        return vthmin + (vth0 - vthmin) * (v - vmin) / (0 - vmin)
+
+f=100*0 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vth0=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+tauv_vals   = np.linspace(0.001, 0.1, 40)
+tauvth_vals = np.linspace(0.001, 0.1, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, tauvth in enumerate(tauvth_vals):
+    for j, tauv in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j] = res[7]
+
+# =============================================================================
+# #%%  Plot
+# =============================================================================
+fs = 15
+plt.figure(figsize=(7,5))
+
+im = plt.imshow(
+    # fout_map,
+    noise,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+            1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+)
+
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Fout vs (f and fi) negative
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vthb=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+tauv_vals   = np.linspace(1, 500, 40)
+tauvth_vals = np.linspace(1, 500, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, f in enumerate(tauvth_vals):
+    for j, fi in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+
+
+#%% Plot
+fs = 15
+plt.figure(figsize=(7,5))
+
+im = plt.imshow(
+    fout_map.T,
+    # noise.T,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[tauv_vals[0], tauv_vals[-1],
+            tauvth_vals[0], tauvth_vals[-1]]
+)
+
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Adaptive threshold - positive
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, v1, alpha, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0#.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        vthlist.append(vth)
+        vlist.append(0)
+        tlist.append(0)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+                vlist[-1]=vth0+1e-3
+                
+            # Update the continuous dynamics
+            
+            v += (-v / tauv) * tmin
+            vth += (vthmax(v, vth0, v1, alpha)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+def vthmax(v, vthb, v1, alpha):
+    if v < v1:
+        return vthb
+    if v>=v1:
+        return vthb + alpha[0]*(v-v1)+alpha[1]*(v-v1)**2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.1
+vth0=0.01 # Threshold value
+v1=0.001
+alpha=[0.8,0] 
+
+
+tmax = 0.1 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 1
+
+res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+
+#%% Plot
+fs=15
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[1]), label='membrane potential')
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[2]), label='threshold potential')
+plt.plot(1000*np.array(res[0]), 1000*v1*np.ones(len(res[0])), label='v1')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Membrane potential (Volts)', fontsize=fs)
+plt.title('fout = {}'.format(np.around(1/res[6], 3)))
+plt.tick_params(axis='both', labelsize=fs)
+# =============================================================================
+# for x in res[5]:
+#     plt.axvline(1000*x, color='r')
+# =============================================================================
+
+# =============================================================================
+# plt.legend()
+# for z in res[3]:
+#     plt.axvline(1000*z, color='r', alpha=0.5)
+# for z in res[4]:
+#     plt.axvline(1000*z, color='b', alpha=0.5)
+# plt.show()
+# =============================================================================
+
+#%% Compare adaptive and fixed positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.1
+vth0=0.01 # Threshold value
+v1=0.001
+alpha=[0.8,0] 
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+flist=np.linspace(1, 50, 20)
+foutf=[]
+fouta=[]
+noisef=[]
+noisea=[]
+fout1=[]
+noise1=[]
+for i,f in enumerate(flist):
+    print(i, len(flist))
+    resf = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, [0,0], navgs)
+    resa = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+    res1=simulate(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+    foutf.append(1/resf[6])
+    noisef.append(resf[7])
+    fouta.append(1/resa[6])
+    noisea.append(resa[7])
+    fout1.append(1/res1[6])
+    noise1.append(res1[7])
+    
+
+# =============================================================================
+# #%% Plot
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+plt.plot(flist, foutf, label='vf')
+plt.plot(flist, fouta, label='va')
+plt.plot(flist, fout1, label='v1')
+plt.xlabel('fe')
+plt.ylabel('fout')
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+plt.subplot(1,2,2)
+plt.plot(flist, noisef, label='nf')
+plt.plot(flist, noisea, label='na')
+plt.plot(flist, noise1, label='n1')
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('fe')
+plt.ylabel('fout')
+plt.legend()
+
+
+#%% Bisecing the mean keep the same
+import numpy as np
+import matplotlib.pyplot as plt
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.001
+alpha=[0.8,0]
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 10
+
+# List of input frequencies
+flist = np.linspace(1, 100, 20)
+
+# Lists to store results
+foutf = []
+fouta = []
+noisef = []
+noisea = []
+
+# Loop over input frequencies
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    
+    # --- Fixed threshold ---
+    resf = simp(vth0, c, ci, f, fi, pr, pri, M, Mi,
+                tauv, tmax, delta_t, tauvth, v1, [0,0], navgs)
+    fout_fixed = 1 / resf[6]
+    foutf.append(fout_fixed)
+    noisef.append(resf[7])
+    
+    # --- Adaptive threshold: adjust vth0 to match mean ---
+    vth_adapt = vth0
+    target_rate = fout_fixed
+    tol = 0.01 * target_rate   # 1% tolerance
+    max_iter = 100
+    
+    for _ in range(max_iter):
+        resa = simp(vth_adapt, c, ci, f, fi, pr, pri, M, Mi,
+                    tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        fout_adapt = 1 / resa[6]
+        if abs(fout_adapt - target_rate) < tol:
+            break
+        # proportional adjustment
+        vth_adapt *= fout_adapt / target_rate
+    
+    fouta.append(fout_adapt)
+    noisea.append(resa[7])
+
+#%% --- Plot results ---
+fs = 15
+plt.figure(figsize=(12,5))
+
+plt.subplot(1,2,1)
+plt.plot(flist, foutf, label='Fixed threshold')
+plt.plot(flist, fouta, label='Adaptive threshold (mean-matched)')
+plt.xlabel('Input frequency f (Hz)', fontsize=fs)
+plt.ylabel('Output frequency (Hz)', fontsize=fs)
+plt.title('Mean firing rate')
+plt.legend()
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.subplot(1,2,2)
+plt.plot(flist, noisef, label='Fixed threshold')
+plt.plot(flist, noisea, label='Adaptive threshold (mean-matched)')
+plt.xlabel('Input frequency f (Hz)', fontsize=fs)
+plt.ylabel('CV² (noise)', fontsize=fs)
+plt.title('Spike train variability at fixed mean')
+plt.legend()
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Bisect 2
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ---------- precise rate estimator ----------
+def estimate_rate(vth_test, f, navgs_match=10, tmax_match=20):
+    rates = []
+    for _ in range(navgs_match):
+        res = simp(vth_test, c, ci, f, fi, pr, pri, M, Mi,
+                   tauv, tmax_match, delta_t, tauvth, v1, alpha, navgs)
+        rates.append(1 / res[6])
+    return np.mean(rates)
+
+# ---------- frequency sweep ----------
+flist = np.linspace(1, 100, 20)
+
+foutf = []
+fouta = []
+noisef = []
+noisea = []
+
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    
+    # ----- fixed threshold -----
+    resf = simp(vth0, c, ci, f, fi, pr, pri, M, Mi,
+                tauv, tmax, delta_t, tauvth, v1, [0,0], navgs)
+    fout_fixed = 1 / resf[6]
+    foutf.append(fout_fixed)
+    noisef.append(resf[7])
+    
+    # ----- bisection search for matched mean -----
+    target = fout_fixed
+    
+    v_low = vth0 * 0.1
+    v_high = vth0 * 10
+    
+    r_low = estimate_rate(v_low, f)
+    r_high = estimate_rate(v_high, f)
+    
+    # ensure bracket contains the solution
+    if r_low < target:
+        v_low, v_high = v_high, v_low
+        r_low, r_high = r_high, r_low
+    
+    for _ in range(30):  # more iterations for precision
+        v_mid = 0.5 * (v_low + v_high)
+        r_mid = estimate_rate(v_mid, f)
+        
+        if abs(r_mid - target) / target < 0.005:  # 0.5% tolerance
+            break
+        
+        if r_mid > target:
+            v_low = v_mid
+        else:
+            v_high = v_mid
+    
+    vth_matched = v_mid
+    
+    # ----- final adaptive run with matched threshold -----
+    resa = simp(vth_matched, c, ci, f, fi, pr, pri, M, Mi,
+                tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+    
+    fouta.append(1 / resa[6])
+    noisea.append(resa[7])
+
+# ---------- plots ----------
+fs = 15
+plt.figure(figsize=(12,5))
+
+plt.subplot(1,2,1)
+plt.plot(flist, foutf, label='Fixed')
+plt.plot(flist, fouta, label='Adaptive (mean matched)')
+plt.xlabel('Input frequency')
+plt.ylabel('Output frequency')
+plt.legend()
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.subplot(1,2,2)
+plt.plot(flist, noisef, label='Fixed')
+plt.plot(flist, noisea, label='Adaptive (mean matched)')
+plt.xlabel('Input frequency')
+plt.ylabel('CV^2')
+plt.legend()
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Bisect 3
+
+
+
+#%% Calculate the output frequency vs input frequency - positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+flist=np.linspace(1,500,100)
+filist=[1e-3, 10e-3, 100e-3]
+
+fouts=[]
+noises=[]
+for j, x in enumerate(filist):
+    foutlist=[]
+    noise=[]
+    for i,f in enumerate(flist):
+        print(j , len(filist), i, len(flist))
+        res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        foutlist.append(1/res[6])
+        noise.append(res[7])
+    fouts.append(foutlist)
+    noises.append(noise)
+    
+
+# =============================================================================
+# #%% Plot positive
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+for i, x in enumerate(fouts):
+    plt.plot(flist, x, label=filist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Mean postsynaptic\nfiring frequency (Hz)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.subplot(1,2,2)
+for i,x in enumerate(noises):
+    plt.plot(flist, x, label=filist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('ISI noise', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+#%% fout vs x positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.1
+vth0=0.01 # Threshold value
+v1=0.001
+alpha=[0.8,0]
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+xlist=np.linspace(1,50,100)
+ylist=[2e-3, 5e-3, 10e-3]
+
+fouts=[]
+noises=[]
+for j, y in enumerate(ylist):
+    foutlist=[]
+    noise=[]
+    for i,x in enumerate(xlist):
+        print(j , len(filist), i, len(flist))
+        f=x
+        vth0=y
+        res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        foutlist.append(1/res[6])
+        noise.append(res[7])
+    fouts.append(foutlist)
+    noises.append(noise)
+    
+# =============================================================================
+# #%% Plot positive
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+for i, x in enumerate(fouts):
+    plt.plot(xlist, x, label=ylist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Mean postsynaptic\nfiring frequency (Hz)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.subplot(1,2,2)
+for i,x in enumerate(noises):
+    plt.plot(xlist, x, label=ylist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('ISI noise', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Fout vs (tauv and tauvth) positive
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, v1, alpha, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0#.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        vthlist.append(vth)
+        vlist.append(0)
+        tlist.append(0)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+                vlist[-1]=vth0+1e-3
+                
+            # Update the continuous dynamics
+            
+            v += (-v / tauv) * tmin
+            vth += (vthmax(v, vth0, v1, alpha)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+def vthmax(v, vthb, v1, alpha):
+    if v < v1:
+        return vthb
+    if v>=v1:
+        return vthb + alpha[0]*(v-v1)+alpha[1]*(v-v1)**2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 10# <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+tauv_vals   = np.linspace(0.001, 0.1, 40)
+tauvth_vals = np.linspace(0.001, 0.1, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, tauvth in enumerate(tauvth_vals):
+    for j, tauv in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+        
+# =============================================================================
+# #%% Plot
+# =============================================================================
+fs = 15
+
+plt.subplot(1,2,1)
+im = plt.imshow(
+    # fout_map,
+    noise,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+            1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+)
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.tight_layout()
+
+# =============================================================================
+# plt.subplot(1,2,2)
+# im = plt.imshow(
+#     noise,
+#     cmap='nipy_spectral',
+#     origin='lower',
+#     aspect='auto',
+#     extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+#             1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+# )
+# 
+# cbar = plt.colorbar(im)
+# # cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+# cbar.ax.tick_params(labelsize=fs)
+# 
+# plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+# plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+# plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# 
+# plt.tight_layout()
+# =============================================================================
+plt.show()
+#%% Fout vs (f and fi) positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+tauv_vals   = np.linspace(1, 100, 40)
+tauvth_vals = np.linspace(1, 100, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, f in enumerate(tauvth_vals):
+    for j, fi in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+        
+#%% Plot
+fs = 15
+
+# =============================================================================
+# plt.subplot(1,2,1)
+# =============================================================================
+im = plt.imshow(
+    # fout_map.T,
+    noise.T,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[tauv_vals[0], tauv_vals[-1],
+            tauvth_vals[0], tauvth_vals[-1]]
+)
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.tight_layout()
+
+# =============================================================================
+# plt.subplot(1,2,2)
+# im = plt.imshow(
+#     noise,
+#     cmap='nipy_spectral',
+#     origin='lower',
+#     aspect='auto',
+#     extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+#             1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+# )
+# 
+# cbar = plt.colorbar(im)
+# # cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+# cbar.ax.tick_params(labelsize=fs)
+# 
+# plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+# plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+# plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# 
+# plt.tight_layout()
+# =============================================================================
+plt.show()
+#%% Adaptive threshold - full positive
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simp2(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, v1, at, alpha, tauvth2, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0#.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        vth1=vth0
+        vth2=0
+        vthlist.append(vth)
+        vlist.append(0)
+        tlist.append(0)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth2 = vth2 + alpha*(vth/vth0)
+                vlist[-1]=vth0+1e-3
+
+            # Update the continuous dynamics
+
+            v += (-v / tauv) * tmin
+            
+            vth1 += (vthmax(v, vth0, v1, at)-vth)/tauvth*tmin
+            vth2 += (-vth2/tauvth2) * tmin
+            
+            vth = vth1 + vth2
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+def vthmax(v, vthb, v1, alpha):
+    if v < v1:
+        return vthb
+    if v>=v1:
+        return vthb + alpha*(v-v1)
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.01
+tauvth=0.02
+
+vth0=0.005 # Threshold value
+v1=0.001
+at=0.8
+
+tauvth2=0.1
+alpha=10e-3
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-4
+navgs = 1
+
+res = simp2(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, at, alpha, tauvth2, navgs)
+
+# =============================================================================
+# #%% Plot
+# =============================================================================
+fs=15
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[1]), label='membrane potential')
+plt.plot(1000*np.array(res[0]), 1000*np.array(res[2]), label='threshold potential')
+plt.plot(1000*np.array(res[0]), 1000*v1*np.ones(len(res[0])), label='v1')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Membrane potential (Volts)', fontsize=fs)
+plt.title('fout = {}'.format(np.around(1/res[6], 3)))
+plt.tick_params(axis='both', labelsize=fs)
+# =============================================================================
+# for x in res[5]:
+#     plt.axvline(1000*x, color='r')
+# =============================================================================
+
+# =============================================================================
+# plt.legend()
+# for z in res[3]:
+#     plt.axvline(1000*z, color='r', alpha=0.5)
+# for z in res[4]:
+#     plt.axvline(1000*z, color='b', alpha=0.5)
+# plt.show()
+# =============================================================================
+#%% Calculate the output frequency vs input frequency - full positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.01
+tauvth=0.02
+
+vth0=0.005 # Threshold value
+v1=0.001
+at=0.8
+
+tauvth2=0.1
+alpha=10e-3
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+flist=np.linspace(1,100,100)
+filist=[0, 50, 100]
+
+fouts=[]
+noises=[]
+for j, fi in enumerate(filist):
+    foutlist=[]
+    noise=[]
+    for i,f in enumerate(flist):
+        print(j , len(filist), i, len(flist))
+        res = simp2(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, 
+                    delta_t, tauvth, v1, at, alpha, tauvth2, navgs)
+        foutlist.append(1/res[6])
+        noise.append(res[7])
+    fouts.append(foutlist)
+    noises.append(noise)
+    
+# =============================================================================
+# #%% Plot positive
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+for i, x in enumerate(fouts):
+    plt.plot(flist, x, label=filist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('Mean postsynaptic\nfiring frequency (Hz)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.subplot(1,2,2)
+for i,x in enumerate(noises):
+    plt.plot(flist, x, label=filist[i])
+plt.legend()
+plt.xlabel('Excitatory input frequency (Hz)', fontsize=fs)
+plt.ylabel('ISI noise', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Compare adaptive and fixed full positive
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.001
+tauvth=0.1
+
+vth0=0.003 # Threshold value
+v1=0.001
+at=0.1
+
+tauvth2=0.001
+alpha=50e-3
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+
+flist=np.linspace(1, 500, 20)
+foutf=[]
+fouta=[]
+noisef=[]
+noisea=[]
+for i,f in enumerate(flist):
+    print(i, len(flist))
+    resf = simp2(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, at, 0, tauvth2, navgs)
+    resa = simp2(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, at, alpha, tauvth2, navgs)
+    foutf.append(1/resf[6])
+    noisef.append(resf[7])
+    fouta.append(1/resa[6])
+    noisea.append(resa[7])
+    
+
+# =============================================================================
+# #%% Plot
+# =============================================================================
+fs=15
+plt.subplot(1,2,1)
+plt.plot(flist, foutf, label='vf')
+plt.plot(flist, fouta, label='va')
+plt.xlabel('fe')
+plt.ylabel('fout')
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+plt.subplot(1,2,2)
+plt.plot(flist, noisef, label='nf')
+plt.plot(flist, noisea, label='na')
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('fe')
+plt.ylabel('fout')
+plt.legend()
+
+
+
+#%% Fixed threshold with checking firing time distribution
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, poisson
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+from scipy.special import gamma, gammaincc   # gamma function & upper incomplete gamma
+from scipy.integrate import quad
+from scipy.stats import expon
+
+# Integrand for v in [0, ∞)
+def integrand(v):
+    # 1 - Gamma[aBe, lamBe*(X + v)] / Gamma[aBe]
+    # Gamma[aBe, z] is the upper incomplete gamma
+    upper_inc = gamma(aBe) * gammaincc(aBe, lamBe * (X + v))
+    return (1 - upper_inc / gamma(aBe)) * (lamv**av / gamma(av)) * v**(av - 1) * np.exp(-lamv * v)
+
+
+# Simulate the Tout ~ Exp(f*finput)
+def simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+    vavgs=[]
+    vcv2=[]
+    ratio = 0
+    e=1e-6
+    beav=[] # mean num bursts
+    biav=[]
+    neblistav=[] # num bursts until AP
+    niblistav=[]
+
+    for _ in range(navgs):
+        vlist=[]
+        tlist=[]
+        preliste=[]
+        prelisti=[]
+        postlist=[]
+        belist=[]
+        bilist=[]
+        nebursts=0
+        nibursts=0
+        neblist=[]
+        niblist=[]
+        v=0
+        tcurr=0
+        timer = delta_t
+
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2 = timer
+
+            if t0<t1 and t0<t2: # AP occurrs
+                b = np.random.gamma(1/CVBe2, 1/(1/CVBe2/Bemean)) # gamma does
+                # alpha and beta, beta=1/rate = 1/(1/(noise*mean))
+                belist.append(b)
+                v=v+b
+                tmin = t0
+                timer-=tmin
+                preliste.append(tcurr+tmin)
+                nebursts+=1
+
+            if t1<t0 and t1<t2: # AP occurrs
+                bi = np.random.gamma(1/CVBi2, 1/(1/CVBi2/Bimean))
+                bilist.append(bi)
+                v=v-bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+                nibursts+=1
+
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.001
+                v=0
+                neblist.append(nebursts)
+                niblist.append(nibursts)
+                nebursts=0
+                nibursts=0
+
+            # Update the continuous dynamics
+            if tauv != np.inf:
+                v += (-v / tauv) * tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        vavgs.append(np.mean(vlist))
+        vcv2.append(np.var(vlist)/np.mean(vlist)**2)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        beav.append(np.mean(belist))
+        biav.append(np.mean(bilist))
+        neblistav.append(np.mean(neblist))
+        niblistav.append(np.mean(niblist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    beav=np.mean(beav)
+    biav=np.mean(biav)
+    neblistav=np.mean(neblistav)
+    niblistav=np.mean(niblistav)
+    vavgs=np.mean(vavgs)
+    vcv2=np.mean(vcv2)
+    #        0        1     2        3           4         5     6     7
+    return tlist, vlist, preliste, prelisti, postlist, Tmean, CVT2, beav, \
+        biav, neblistav, niblistav, vavgs, vcv2
+        # 8     9           10        11     12
+
+# =============================================================================
+# # Parameters good
+# f  = 10 #20
+# fi = 100 #100
+# 
+# Bemean = 0.03 #0.03
+# CVBe2  = 1
+# 
+# Bimean = 0.01
+# CVBi2  = 0.1
+# 
+# tauv=0.001
+# vth = 0.02
+# =============================================================================
+
+# Parameters
+f  = 20 #20
+fi = 100 #100
+
+Bemean = 0.03 #0.03
+CVBe2  = 1
+
+Bimean = 0.01
+CVBi2  = 0.001
+
+X=0.02
+
+tauv=0.001
+vth = 0.02
+
+tmax=500
+delta_t=0.001
+navgs=1
+
+Bi2mean = (1+CVBi2)*Bimean**2
+vmean = fi * tauv * Bimean
+CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
+
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+res=simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+
+# =============================================================================
+# plt.plot(res[0], res[1])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# plt.show()
+# =============================================================================
+
+# Numerical integration
+prob, err = quad(integrand, 0, np.inf)
+print("Probability =", prob)
+lam=f*prob
+res=simgam(vth, Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax, delta_t, navgs)
+intervals = np.diff(res[4])
+
+counts, bins, _ = plt.hist(intervals, bins=50, density=True,
+                           color='skyblue',       # lighter color
+                           edgecolor='black',     # distinct outlines
+                           linewidth=1.2,         # thicker edges
+                           label='Inter-spike interval simulations')
+fs=15
+x = np.linspace(0, max(intervals), 100)
+pdf=lam*np.exp(-lam*x)
+plt.plot(x, pdf, 'r', lw=3,
+         label=r'Exponential$( f_{exc} \times P(Be-V>X) )$')
+plt.xlabel('Inter-spike interval (sec)', fontsize=fs)
+# plt.ylabel('Counts', fontsize=fs)
+plt.yticks([])
+plt.plot([],[],' ', label=r'$f_{{exc}}$={}, $f_{{inh}}$={}'.format(f, fi))
+plt.legend()
+plt.ylim([0, np.max(counts)+1])
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Nonlinear threshold function
+
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import exponential
+from scipy.special import gamma, gammaincc
+from scipy.integrate import quad
+
+# ---------------------------------------------------------------------
+# Piecewise threshold
+# ---------------------------------------------------------------------
+
+def X(v):
+    return np.where(v < v1, x0, x0 + a*v)
+
+# ---------------------------------------------------------------------
+# Simulation
+# ---------------------------------------------------------------------
+def simgam(Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax):
+
+    v = 0
+    tcurr = 0
+    spikes = []
+
+    while tcurr < tmax:
+
+        t0 = exponential(1/f)
+        t1 = exponential(1/fi)
+
+        if t0 < t1:
+            tmin = t0
+            v += np.random.gamma(1/CVBe2, Bemean*CVBe2)
+        else:
+            tmin = t1
+            v -= np.random.gamma(1/CVBi2, Bimean*CVBi2)
+
+        if tauv != np.inf:
+            v += (-v/tauv)*tmin
+
+        tcurr += tmin
+
+        if v >= X(v):
+            spikes.append(tcurr)
+            v = 0
+
+    return np.array(spikes)
+
+# ---------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------
+f  = 100
+fi = 100
+
+x0 = 0.02
+v1 = 0.01
+
+a  = 0.8
+
+Bemean = 0.03
+CVBe2  = 1.0
+
+Bimean = 0.01
+CVBi2  = 0.001
+
+tauv = 0.001
+tmax = 500
+
+# ---------------------------------------------------------------------
+# Voltage distribution parameters
+# ---------------------------------------------------------------------
+Bi2mean = (1+CVBi2)*Bimean**2
+vmean = fi * tauv * Bimean
+CVv2  = Bi2mean / (2 * Bimean**2 * fi * tauv)
+
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+
+coef_v = lamv**av / gamma(av)
+
+# ---------------------------------------------------------------------
+# Integrands split at v1
+# ---------------------------------------------------------------------
+def integrand_low(v):
+    z = np.maximum(x0 - v, 0)
+    return gammaincc(aBe, lamBe*z) * coef_v * v**(av-1) * np.exp(-lamv*v)
+
+def integrand_high(v):
+    z = np.maximum(x0 + a*v - v, 0)
+    return gammaincc(aBe, lamBe*z) * coef_v * v**(av-1) * np.exp(-lamv*v)
+
+prob1, _ = quad(integrand_low, 0, v1)
+prob2, _ = quad(integrand_high, v1, np.inf)
+
+prob = prob1 + prob2
+
+print("Analytical probability =", prob)
+
+lam = f * prob
+print("Predicted firing rate =", lam)
+
+# ---------------------------------------------------------------------
+# Simulation
+# ---------------------------------------------------------------------
+spikes = simgam(Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax)
+intervals = np.diff(spikes)
+
+# ---------------------------------------------------------------------
+# Plot
+# ---------------------------------------------------------------------
+plt.hist(intervals, bins=50, density=True,
+         color='skyblue', edgecolor='black', label='Simulation')
+
+x = np.linspace(0, max(intervals), 200)
+plt.plot(x, lam*np.exp(-lam*x), 'r', lw=3, label='Theory')
+
+plt.xlabel("ISI (s)")
+plt.yticks([])
+plt.legend()
+plt.show()
+
+#%% Fits
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import exponential
+from scipy.special import gamma, gammaincc
+from scipy.integrate import quad
+from scipy.stats import gamma as gamma_dist, lognorm, expon
+
+# ---------------------------------------------------------------------
+# Piecewise threshold
+# ---------------------------------------------------------------------
+def X(v):
+    return np.where(v < v1, x0, x0 + a*v)
+
+# ---------------------------------------------------------------------
+# Simulation function
+# ---------------------------------------------------------------------
+def simgam(Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax):
+    v = 0
+    tcurr = 0
+    spikes = []
+    while tcurr < tmax:
+        t0 = exponential(1/f)
+        t1 = exponential(1/fi)
+        if t0 < t1:
+            tmin = t0
+            v += np.random.gamma(1/CVBe2, Bemean*CVBe2)
+        else:
+            tmin = t1
+            v -= np.random.gamma(1/CVBi2, Bimean*CVBi2)
+        if tauv != np.inf:
+            v += (-v/tauv)*tmin
+        tcurr += tmin
+        if v >= X(v):
+            spikes.append(tcurr)
+            v = 0
+    return np.array(spikes)
+
+# ---------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------
+f  = 100
+fi = 100
+x0 = 0.02
+v1 = 0.01
+a  = 0.95
+Bemean = 0.4
+CVBe2  = 0.01
+Bimean = 0.3
+CVBi2  = 0.01
+tauv = 0.001
+tmax = 500
+
+# ---------------------------------------------------------------------
+# Voltage distribution parameters
+# ---------------------------------------------------------------------
+Bi2mean = (1+CVBi2)*Bimean**2
+Be2mean = (1+CVBe2)*Bemean**2
+vmean = (Bemean*f - Bimean*fi)*tauv
+CVv2 = (tauv*(Be2mean*f + Bi2mean*fi + 2*(Bemean*f - Bimean*fi)**2*tauv))/2.
+av   = 1 / CVv2
+lamv = 1 / CVv2 / vmean
+aBe   = 1 / CVBe2
+lamBe = 1 / CVBe2 / Bemean
+coef_v = lamv**av / gamma(av)
+
+# ---------------------------------------------------------------------
+# Integrands split at v1
+# ---------------------------------------------------------------------
+def integrand_low(v):
+    z = np.maximum(x0 - v, 0)
+    return gammaincc(aBe, lamBe*z) * coef_v * v**(av-1) * np.exp(-lamv*v)
+
+def integrand_high(v):
+    z = np.maximum(x0 + a*v - v, 0)
+    return gammaincc(aBe, lamBe*z) * coef_v * v**(av-1) * np.exp(-lamv*v)
+
+prob1, _ = quad(integrand_low, 0, v1)
+prob2, _ = quad(integrand_high, v1, np.inf)
+prob = prob1 + prob2
+
+lam = f * prob
+print("Predicted firing rate =", lam)
+
+# ---------------------------------------------------------------------
+# Run simulation
+# ---------------------------------------------------------------------
+spikes = simgam(Bemean, CVBe2, Bimean, CVBi2, f, fi, tauv, tmax)
+intervals = np.diff(spikes)
+x = np.linspace(0, max(intervals), 200)
+
+# ------------------------------
+# Compute mean and CV^2
+# ------------------------------
+mean_isi = np.mean(intervals)
+cv2_isi  = (np.std(intervals)/mean_isi)**2
+
+# ------------------------------
+# Exponential fit
+# ------------------------------
+exp_lambda = 1/mean_isi
+exp_pdf = exp_lambda * np.exp(-exp_lambda*x)
+exp_loglik = np.sum(np.log(exp_lambda * np.exp(-exp_lambda*intervals)))
+exp_aic = 2*1 - 2*exp_loglik  # 1 parameter
+
+# ------------------------------
+# Gamma fit
+# ------------------------------
+gamma_params = gamma_dist.fit(intervals, floc=0)
+gamma_pdf = gamma_dist.pdf(x, *gamma_params)
+gamma_loglik = np.sum(np.log(gamma_dist.pdf(intervals, *gamma_params)))
+gamma_aic = 2*2 - 2*gamma_loglik  # shape + scale
+
+# ------------------------------
+# Lognormal fit
+# ------------------------------
+lognorm_params = lognorm.fit(intervals, floc=0)
+lognorm_pdf = lognorm.pdf(x, *lognorm_params)
+lognorm_loglik = np.sum(np.log(lognorm.pdf(intervals, *lognorm_params)))
+lognorm_aic = 2*2 - 2*lognorm_loglik  # shape + scale
+
+# ------------------------------
+# Plot histogram + fits with gamma parameters including shape, scale, CV^2, and rate
+# ------------------------------
+fs = 15
+
+# Convert seconds to milliseconds
+intervals_ms = intervals * 1000
+x_ms = x * 1000
+
+# Gamma fit parameters
+gamma_shape, gamma_loc, gamma_scale = gamma_params
+gamma_mean_ms = gamma_shape * gamma_scale * 1000       # mean in ms
+gamma_cv2 = 1 / gamma_shape                             # CV^2
+gamma_rate_hz = 1 / (gamma_shape * gamma_scale)         # rate in Hz (1/s)
+
+plt.figure(figsize=(8,5))
+plt.hist(intervals_ms, bins=50, density=True, color='skyblue', edgecolor='black', alpha=0.6,
+         label=f'Simulation\nmean={mean_isi*1000:.2f} ms, CV²={cv2_isi:.3f}')
+
+plt.plot(x_ms, gamma_pdf / 1000, 'g', lw=2, 
+         label=(f'Gamma fit\nshape={gamma_shape:.3f}, scale={gamma_scale:.3f} s\n'
+                f'mean={gamma_mean_ms:.2f} ms, CV²={gamma_cv2:.3f}, rate={gamma_rate_hz:.1f} Hz, '
+                f'AIC={gamma_aic:.1f}'))
+
+plt.xlabel("Inter-spike interval (ms)", fontsize=fs)
+plt.ylabel("Probability density function", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+plt.xlim([-1, 50])
+plt.yticks([])
+plt.show()
+
+#%% Negative threshold histogram
+
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+from scipy.stats import gamma as gamma_dist, lognorm, expon
+
+# ---------------------------------------------------------------------
+# Adaptive threshold function
+# ---------------------------------------------------------------------
+def vthmax(v, vth0, vthmin, vmin):
+    if v >= 0:
+        return vth0
+    elif v <= vmin:
+        return vthmin
+    else:
+        return vthmin + (vth0 - vthmin) * (v - vmin) / (0 - vmin)
+
+# ---------------------------------------------------------------------
+# Simulation function with negative adaptive threshold
+# ---------------------------------------------------------------------
+def sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, vmin, vthmin, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    all_postlist = []
+
+    for _ in range(navgs):
+        v = 0
+        vth = vth0
+        tcurr = 0
+        timer = delta_t
+        postlist = []
+
+        while tcurr < tmax:
+            # Generate inter-event times
+            t0 = exponential(1/f)
+            t1 = exponential(1/fi)
+            t2 = timer
+
+            if t0 < t1 and t0 < t2:
+                b = binomial(M, pr)
+                v += c*b
+                tmin = t0
+                timer -= tmin
+            elif t1 < t0 and t1 < t2:
+                bi = binomial(Mi, pri)
+                v -= ci*bi
+                tmin = t1
+                timer -= tmin
+            else:
+                tmin = t2
+                timer = delta_t
+
+            tcurr += tmin
+
+            # Spike generation
+            if v >= vth:
+                postlist.append(tcurr)
+                v = 0
+                vth = vth0
+
+            # Continuous dynamics
+            if tauv != 0:
+                v += (-v/tauv) * tmin
+            else:
+                v = 0
+            vth += (vthmax(v, vth0, vthmin, vmin) - vth)/tauvth * tmin
+
+        # ISI statistics
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2 = np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        all_postlist.extend(postlist)
+
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+
+    return np.array(all_postlist), Tmean, CVT2
+
+# ---------------------------------------------------------------------
+# Simulation parameters
+# ---------------------------------------------------------------------
+vth0 = 0.02
+vthmin = 0.005
+vmin = -0.01
+c = 0.01
+ci = 0.01
+f = 100
+fi = 100
+pr = 0.5
+pri = 0.5
+M = 20
+Mi = 20
+tauv = 0.001
+tmax = 500
+delta_t = 0.001
+tauvth = 0.005
+navgs = 1  # number of repetitions
+
+# ---------------------------------------------------------------------
+# Run simulation
+# ---------------------------------------------------------------------
+postlist, mean_isi, cv2_isi = sima(vth0, c, ci, f, fi, pr, pri, M, Mi,
+                                    tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+
+intervals = np.diff(postlist)
+x = np.linspace(0, max(intervals), 200)
+
+# ------------------------------
+# Exponential fit
+# ------------------------------
+exp_lambda = 1/mean_isi
+exp_pdf = exp_lambda * np.exp(-exp_lambda*x)
+exp_loglik = np.sum(np.log(exp_lambda * np.exp(-exp_lambda*intervals)))
+exp_aic = 2*1 - 2*exp_loglik  # 1 parameter
+
+# ------------------------------
+# Gamma fit
+# ------------------------------
+gamma_params = gamma_dist.fit(intervals, floc=0)
+gamma_pdf = gamma_dist.pdf(x, *gamma_params)
+gamma_loglik = np.sum(np.log(gamma_dist.pdf(intervals, *gamma_params)))
+gamma_aic = 2*2 - 2*gamma_loglik  # shape + scale
+
+# ------------------------------
+# Lognormal fit
+# ------------------------------
+lognorm_params = lognorm.fit(intervals, floc=0)
+lognorm_pdf = lognorm.pdf(x, *lognorm_params)
+lognorm_loglik = np.sum(np.log(lognorm.pdf(intervals, *lognorm_params)))
+lognorm_aic = 2*2 - 2*lognorm_loglik  # shape + scale
+
+# ------------------------------
+# Plot histogram + fits with gamma parameters including shape, scale, CV^2, and rate
+# ------------------------------
+fs = 15
+
+# Convert seconds to milliseconds
+intervals_ms = intervals * 1000
+x_ms = x * 1000
+
+gamma_shape, gamma_loc, gamma_scale = gamma_params
+gamma_mean_ms = gamma_shape * gamma_scale * 1000
+gamma_cv2 = 1 / gamma_shape
+gamma_rate_hz = 1 / (gamma_shape * gamma_scale)
+
+plt.figure(figsize=(8,5))
+plt.hist(intervals_ms, bins=50, density=True, color='skyblue', edgecolor='black', alpha=0.6,
+         label=f'Simulation\nmean={mean_isi*1000:.2f} ms, CV²={cv2_isi:.3f}')
+
+plt.plot(x_ms, gamma_pdf / 1000, 'g', lw=2,
+         label=(f'Gamma fit\nshape={gamma_shape:.3f}, scale={gamma_scale:.3f} s\n'
+                f'mean={gamma_mean_ms:.2f} ms, CV²={gamma_cv2:.3f}, rate={gamma_rate_hz:.1f} Hz, '
+                f'AIC={gamma_aic:.1f}'))
+
+plt.xlabel("Inter-spike interval (ms)", fontsize=fs)
+plt.ylabel("Probability density function", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+plt.xlim([-1, 50])
+plt.yticks([])
+plt.show()
+
+#%% Plot the threshold potential positive
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def vthmax(v, vthb, v1, alpha):
+    if v < v1:
+        return vthb
+    else:
+        return vthb + alpha*(v - v1)
+
+# parameters
+f = 100
+fi = 0
+pr = 0.05
+pri = 0.05
+M = 20
+Mi = 20
+c = 0.002
+ci = 0.002
+
+tauv = 0.01
+tauvth = 0.02
+vth0 = 0.01
+v1 = 0.005
+alpha = 0.8
+
+tmax = 1
+delta_t = 1e-4
+navgs = 1
+
+# voltage range for plotting
+v = np.linspace(0, 0.02, 1000)
+
+# evaluate piecewise threshold
+vth = np.array([vthmax(x, vth0, v1, alpha) for x in v])
+
+plt.plot(v, vth)
+plt.xlabel("Membrane potential v")
+plt.ylabel("Threshold v_th")
+plt.title("Piecewise linear adaptive threshold")
+plt.show()
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# threshold target
+def vthmax(v, vth0, v1, alpha):
+    if v < v1:
+        return vth0
+    else:
+        return vth0 + alpha*(v - v1)
+
+# parameters
+vth0 = 0.02
+v1 = 0.01
+alpha = 0.8
+tauvth = 0.02
+
+# time grid
+tmax = 1
+dt = 1e-4
+t = np.arange(0, tmax, dt)
+
+# slowly increasing membrane potential
+v = np.linspace(0, 0.02, len(t))
+
+# integrate threshold ODE
+vth = np.zeros_like(t)
+vth[0] = vth0
+
+for i in range(1, len(t)):
+    vth_target = vthmax(v[i-1], vth0, v1, alpha)
+    dvth = (vth_target - vth[i-1]) / tauvth
+    vth[i] = vth[i-1] + dvth * dt
+
+fs = 15
+
+plt.plot(1000*v, 1000*vth)
+
+plt.xlabel("Membrane potential (mV)", fontsize=fs)
+plt.ylabel("Threshold potential (mV)", fontsize=fs)
+plt.ylim([18, 28])
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.show()
+
+#%% Plot the threshold potential negative
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def vthmax(v, vth0, vthmin, vmin):
+    if v >= 0:
+        return vth0
+    elif v <= vmin:
+        return vthmin
+    else:
+        return vthmin + (vth0 - vthmin) * (v - vmin) / (0 - vmin)
+
+# parameters
+vth0 = 0.02
+vthmin = -0.04
+vmin = -0.05
+tauvth = 0.02
+
+# ramp membrane potential from hyperpolarized to 0
+tmax = 1
+dt = 1e-3
+t = np.arange(0, tmax, dt)
+v = np.linspace(-200e-3, 30e-3, len(t))
+
+# integrate threshold dynamics
+vth = np.zeros_like(t)
+vth[0] = vth0
+
+for i in range(1, len(t)):
+    target = vthmax(v[i-1], vth0, vthmin, vmin)
+    dvth = (target - vth[i-1]) / tauvth
+    vth[i] = vth[i-1] + dvth * dt
+
+# plot v_th vs v
+fs = 15
+plt.plot(1000*v, 1000*vth)
+plt.xlim([-70, 20])
+plt.xlabel("Membrane potential v", fontsize=fs)
+plt.ylabel("Threshold potential v_th", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.title("Negative adaptive threshold vs membrane potential", fontsize=fs)
+plt.show()
+#%% Fout vs (tauv and tauvth) negative
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+
+def sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, vmin, vthmin, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+
+            # Update the continuous dynamics
+            
+            if tauv!=0:
+                v += (-v / tauv) * tmin
+            else:
+                v=0
+            vth += (vthmax(v, vth0, vthmin, vmin)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+
+def vthmax(v, vth0, vthmin, vmin):
+    if v >= 0:
+        return vth0
+    elif v <= vmin:
+        return vthmin
+    else:
+        return vthmin + (vth0 - vthmin) * (v - vmin) / (0 - vmin)
+
+f=100*0 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.02
+ci=0.02
+
+tauv=0.01
+tauvth=0.02
+vth0=0.02 # Threshold value
+vmin=-0.05
+vthmin=-0.04
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+tauv_vals   = np.linspace(0.001, 0.1, 40)
+tauvth_vals = np.linspace(0.001, 0.1, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, tauvth in enumerate(tauvth_vals):
+    for j, tauv in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = sima(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, vmin, vthmin, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j] = res[7]
+
+#%%  Plot - Negative
+fs = 15
+plt.figure(figsize=(7,5))
+
+im = plt.imshow(
+    # fout_map,
+    noise,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+            1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+)
+
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Fout vs (tauv and tauvth) positive
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t,
+         tauvth, v1, alpha, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+
+        e=1e-9
+        tcurr=0
+        ratio = 0#.3
+        timer = delta_t
+        v=0
+        vth=vth0
+        vthlist.append(vth)
+        vlist.append(0)
+        tlist.append(0)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+
+            else: # an inhibition event occurs
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                vth=vth0
+                vlist[-1]=vth0+1e-3
+                
+            # Update the continuous dynamics
+            
+            v += (-v / tauv) * tmin
+            vth += (vthmax(v, vth0, v1, alpha)-vth)/tauvth*tmin
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, vthlist, prelist, prelisti, postlist, Tmean, CVT2
+
+def vthmax(v, vthb, v1, alpha):
+    if v < v1:
+        return vthb
+    if v>=v1:
+        return vthb + alpha[0]*(v-v1)+alpha[1]*(v-v1)**2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.1
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+tauv_vals   = np.linspace(0.001, 0.1, 40)
+tauvth_vals = np.linspace(0.001, 0.1, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, tauvth in enumerate(tauvth_vals):
+    for j, tauv in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = simp(vth0, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, tauvth, v1, alpha, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+
+#%% Plot - positive
+fs = 15
+
+im = plt.imshow(
+    fout_map,
+    # noise,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[1000*tauv_vals[0], 1000*tauv_vals[-1],
+            1000*tauvth_vals[0], 1000*tauvth_vals[-1]]
+)
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+plt.xlabel(r"Membrane time constant (ms)", fontsize=fs)
+plt.ylabel(r"Threshold time constant (ms)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Fout vs (tauv and tauvth) fixed
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+        
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        tlist.append(0)
+        vlist.append(0)
+        vthlist.append(vth)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else:
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                if tcurr>ratio*tmax:
+                    postlist.append(tcurr)
+                v=0
+                vlist[-1]=vth+0.001
+
+            if tauv!=np.inf and tauv!=0:
+                v += (-v / tauv) * tmin
+            if tauv==0:
+                v=0
+            
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist[1:], vlist[1:], vthlist[1:], prelist, prelisti, postlist, Tmean, CVT2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.01
+ci=0.01
+
+tauv=0.01
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 10 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 1
+
+tauv_vals   = np.linspace(1, 100, 40)
+tauvth_vals = np.linspace(1, 100, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, f in enumerate(tauvth_vals):
+    for j, fi in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+
+#%% Plot - fixed
+fs = 15
+# =============================================================================
+# noise2=noise.copy()
+# noise2[np.isnan(noise2)]=0
+# =============================================================================
+
+im = plt.imshow(
+    # fout_map.T,
+    noise.T,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[tauv_vals[0], tauv_vals[-1],
+            tauvth_vals[0], tauvth_vals[-1]]
+)
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+plt.xlabel(r"Excitatory input frequency (Hz)", fontsize=fs)
+plt.ylabel(r"Inhibitory input frequency (Hz)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Fout vs (tauv and tauvth) fixed - normal
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        vthlist=[]
+        tlist=[]
+        prelist=[]
+        prelisti=[]
+        postlist=[]
+        
+        e=1e-9
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        v=0
+        tlist.append(0)
+        vlist.append(0)
+        vthlist.append(vth)
+        while tcurr < tmax:
+            
+            t0=exponential(1/(f+e))
+            t1=exponential(1/(fi+e))
+            t2=timer
+            
+            if t0<t1 and t0<t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+                
+            elif t1<t0 and t1<t2: # AP occurrs
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+                prelisti.append(tcurr+tmin)
+    
+            else:
+                # print('2')
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                if tcurr>ratio*tmax:
+                    postlist.append(tcurr)
+                v=0
+                vlist[-1]=vth+0.001
+
+            if tauv!=np.inf and tauv!=0:
+                v += (-v / tauv) * tmin
+            if tauv==0:
+                v=0
+            
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist[1:], vlist[1:], vthlist[1:], prelist, prelisti, postlist, Tmean, CVT2
+
+f=100 # 300 # excitatory frequency, 40 excitatory neurons
+fi=100*0
+pr=0.05
+pri=0.05
+M=20
+Mi=20
+c=0.002
+ci=0.002
+
+tauv=0.01
+tauvth=0.02
+vth0=0.01 # Threshold value
+v1=0.005
+alpha=[0.8,0]
+
+tmax = 20 # <-------------- TMAX
+delta_t = 1e-3
+navgs = 20
+
+tauv_vals   = np.linspace(1, 100, 40)
+tauvth_vals = np.linspace(1, 100, 40)
+
+fout_map = np.zeros((len(tauvth_vals), len(tauv_vals)))
+noise=np.zeros_like(fout_map)
+for i, f in enumerate(tauvth_vals):
+    for j, fi in enumerate(tauv_vals):
+        print(i, len(tauv_vals), j, len(tauvth_vals))
+        res = simulate(vth, c, ci, f, fi, pr, pri, M, Mi, tauv, tmax, delta_t, navgs)
+        Tmean = res[6]
+        fout_map[i, j] = 0 if np.isnan(Tmean) else 1/Tmean
+        noise[i,j]=res[7]
+
+# =============================================================================
+# #%% Plot - fixed
+# =============================================================================
+fs = 15
+# =============================================================================
+# noise2=noise.copy()
+# noise2[np.isnan(noise2)]=0
+# =============================================================================
+
+im = plt.imshow(
+    # fout_map.T,
+    noise.T,
+    cmap='nipy_spectral',
+    origin='lower',
+    aspect='auto',
+    extent=[tauv_vals[0], tauv_vals[-1],
+            tauvth_vals[0], tauvth_vals[-1]]
+)
+cbar = plt.colorbar(im)
+# cbar.set_label("Mean postsynaptic firing frequency (Hz)", fontsize=fs, rotation=90)
+cbar.ax.tick_params(labelsize=fs)
+plt.xlabel(r"Excitatory input frequency (Hz)", fontsize=fs)
+plt.ylabel(r"Inhibitory input frequency (Hz)", fontsize=fs)
+plt.title("Mean postsynaptic firing frequency", fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
