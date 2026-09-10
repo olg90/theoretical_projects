@@ -132,6 +132,8 @@ boundslist = [[puu,puu+puL,puu+puL+pud],
           [pdu, pdu+pdL, pdu+pdL+pdd]]
 
 ds=np.zeros((navgs,naps,M))
+qc=np.zeros((navgs,naps))
+
 for iav in range(navgs):
     for iap in range(naps):
         for ids in range(M):
@@ -140,6 +142,7 @@ for iav in range(navgs):
             else:
                 state=ds[iav,iap-1,ids]
                 if state==2 and np.random.rand() < pr:
+                    qc[iav,iap]+=1
                     state=0
                 state=get_next_state(state)
             ds[iav,iap,ids]=state
@@ -160,39 +163,45 @@ pavg=np.mean(pavlist,axis=0)
 pusim=pavg[:, 0]  # simulated p_u(i)
 pLsim=pavg[:, 1]  # simulated p_L(i)
 pdsim=pavg[:, 2]  # simulated p_d(i)
+
+qcavg=np.mean(qc,axis=0)
     
 pL0=0
 pd0=0
 pu0=1
 
-pL = np.zeros(naps)
-pd = np.zeros(naps)
-pu = np.zeros(naps)
+pL=np.zeros(naps)
+pd=np.zeros(naps)
+pu=np.zeros(naps)
 
-pL[0] = pL0
-pd[0] = pd0
-pu[0] = pu0
+pL[0]=pL0
+pd[0]=pd0
+pu[0]=pu0
 
 for i in range(naps-1):
 
     # p_d(i+1)
-    pd[i + 1] = (
-        pd[i] * (1 - pr) * (1 - pdu - pdL)
-        + pd[i] * pr * pud
-        + pu[i] * pud
-        + pL[i] * pLd
+    pd[i+1] = (
+        pd[i]*(1-pr)*(1-pdu-pdL)
+        + pd[i]*pr*pud
+        + pu[i]*pud
+        + pL[i]*pLd
     )
 
     # p_L(i+1)
-    pL[i + 1] = (
-        pL[i] * (1 - pLu - pLd)
-        + pd[i] * (1 - pr) * pdL
-        + pd[i] * pr * puL
-        + pu[i] * puL
+    pL[i+1] = (
+        pL[i]*(1-pLu-pLd)
+        + pd[i]*(1-pr)*pdL
+        + pd[i]*pr*puL
+        + pu[i]*puL
     )
 
     # p_u(i+1)
-    pu[i + 1] = 1 - pL[i + 1] - pd[i + 1]
+    pu[i+1]=1-pL[i+1]-pd[i+1]
+
+# Mean QC at each AP
+qc=np.zeros(naps)
+qc[1:]=M*pr*pd[:-1]
 
 # =============================================================================
 # plt.plot(pusim,label='U simulation')
@@ -209,5 +218,12 @@ plt.xlabel('AP stimulus number, i')
 plt.ylabel('Probability(i)')
 plt.legend()
 plt.show()
-    
+
+plt.plot(qcavg,label='Mean QC simulation')
+plt.plot(qc,label='Mean QC theory')
+
+plt.xlabel('AP stimulus number, i')
+plt.ylabel('Mean QC')
+plt.legend()
+plt.show()
 
