@@ -1,0 +1,213 @@
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+
+def get_pDU(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kDL * kLU * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
+
+
+def get_pDL(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kDL * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
+
+
+def get_pDD(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * (-((-1 + E2) * kDL * (kLD * (-kLU + kUL) + kDL * (kLU + kUL) - (kLU + kUL)**2)) + kDL * kLU * D + E2 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + 2 * E3 * kLD * kUL * D) / C
+
+
+def get_pLU(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kLU * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
+
+
+def get_pLL(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * ((-1 + E2) * (kDL**2 * kLU - kLD * (kLD + kLU - kUL) * kUL - kDL * (kLD + kLU) * (kLU + kUL)) + kDL * kLU * D + E2 * kDL * kLU * D + 2 * E3 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
+
+
+def get_pLD(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kLD * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
+
+
+def get_pUU(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * (-((-1 + E2) * kUL * (-kDL**2 - kLD * (kLD + kLU - kUL) + kDL * (-2 * kLD + kLU + kUL))) + 2 * E3 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
+
+
+def get_pUL(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kUL * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
+
+
+def get_pUD(T):
+    S = kDL + kLD + kLU + kUL
+    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
+    E1 = np.exp(-0.5 * (S + D) * T)
+    E2 = np.exp(D * T)
+    E3 = np.exp(0.5 * (S + D) * T)
+    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
+    return E1 * kLD * kUL * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
+
+def get_next_state(s):
+    r=np.random.rand(1)
+    bounds=boundslist[int(s)]
+    if r<=bounds[0]:
+        return 0
+    if bounds[0]<r and r<=bounds[1]:
+        return 1
+    if bounds[1]<r and r <= 1:
+        return 2
+
+
+kDL = 1
+kLD = 1
+kLU = 1
+kUL = 1
+
+M = 100
+f = 10
+pr = 0.5
+
+T = 1 / f
+naps = 100
+navgs=100
+
+puu = get_pUU(T)
+puL = get_pUL(T)
+pud = get_pUD(T)
+
+pLu = get_pLU(T)
+pLL = get_pLL(T)
+pLd = get_pLD(T)
+
+pdu = get_pDU(T)
+pdL = get_pDL(T)
+pdd = get_pDD(T)
+
+boundslist = [[puu,puu+puL,puu+puL+pud],
+          [pLu, pLu+pLL, pLu+pLL+pLd],
+          [pdu, pdu+pdL, pdu+pdL+pdd]]
+
+ds=np.zeros((navgs,naps,M))
+for iav in range(navgs):
+    for iap in range(naps):
+        for ids in range(M):
+            if iap==0:
+                state=0
+            else:
+                state=ds[iav,iap-1,ids]
+                if state==2 and np.random.rand() < pr:
+                    state=0
+                state=get_next_state(state)
+            ds[iav,iap,ids]=state
+            
+pavlist=[]
+for iav in range(navgs):
+    pilist=[]
+    for iap in range(naps):
+        p0=np.sum(ds[iav,iap]==0)/M
+        p1=np.sum(ds[iav,iap]==1)/M
+        p2=np.sum(ds[iav,iap]==2)/M
+        pilist.append([p0,p1,p2])
+    pilist=np.array(pilist)
+    pavlist.append(pilist)
+pavlist=np.array(pavlist)
+pavg=np.mean(pavlist,axis=0)
+
+pusim=pavg[:, 0]  # simulated p_u(i)
+pLsim=pavg[:, 1]  # simulated p_L(i)
+pdsim=pavg[:, 2]  # simulated p_d(i)
+    
+pL0=0
+pd0=0
+pu0=1
+
+pL = np.zeros(naps)
+pd = np.zeros(naps)
+pu = np.zeros(naps)
+
+pL[0] = pL0
+pd[0] = pd0
+pu[0] = pu0
+
+for i in range(naps-1):
+
+    # p_d(i+1)
+    pd[i + 1] = (
+        pd[i] * (1 - pr) * (1 - pdu - pdL)
+        + pd[i] * pr * pud
+        + pu[i] * pud
+        + pL[i] * pLd
+    )
+
+    # p_L(i+1)
+    pL[i + 1] = (
+        pL[i] * (1 - pLu - pLd)
+        + pd[i] * (1 - pr) * pdL
+        + pd[i] * pr * puL
+        + pu[i] * puL
+    )
+
+    # p_u(i+1)
+    pu[i + 1] = 1 - pL[i + 1] - pd[i + 1]
+
+# =============================================================================
+# plt.plot(pusim,label='U simulation')
+# plt.plot(pu,label='U theory')
+# =============================================================================
+
+plt.plot(pLsim,label='L simulation')
+plt.plot(pL,label='L theory')
+
+plt.plot(pdsim,label='D simulation')
+plt.plot(pd,label='D theory')
+
+plt.xlabel('AP')
+plt.ylabel('Probability')
+plt.legend()
+plt.show()
+    
+
