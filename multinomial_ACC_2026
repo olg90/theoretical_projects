@@ -199,14 +199,14 @@ for i in range(naps-1):
 # plt.plot(pu,label='U theory')
 # =============================================================================
 
-plt.plot(pLsim,label='L simulation')
-plt.plot(pL,label='L theory')
+plt.plot(pLsim,label='pL(i) simulation')
+plt.plot(pL,label='pL(i) theory')
 
-plt.plot(pdsim,label='D simulation')
-plt.plot(pd,label='D theory')
+plt.plot(pdsim,label='pD(i) simulation')
+plt.plot(pd,label='pD(i) theory')
 
-plt.xlabel('AP')
-plt.ylabel('Probability')
+plt.xlabel('AP stimulus number, i')
+plt.ylabel('Probability(i)')
 plt.legend()
 plt.show()
     
