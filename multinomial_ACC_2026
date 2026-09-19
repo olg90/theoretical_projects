@@ -811,14 +811,15 @@ for j,value in zip(j_values,E_bibi_j):
 import numpy as np
 import matplotlib.pyplot as plt
 
-kDL = 10
-kLD = 10
+kDL = 1
+kLD = 100
 kLU = 10
 kUL = 20
 
 M = 100
 f = 10
 T = 1 / f
+max_j = 100
 naps = 121
 
 pr0 = 0.1
@@ -927,8 +928,8 @@ for n in range(naps-1):
 
 p_ri = pd[i-1]*pr[i]
 
-j_values = np.arange(1,101)
-rho = np.zeros(100)
+j_values = np.arange(1,max_j+1)
+rho = np.zeros(max_j)
 
 for n,j in enumerate(j_values):
 
