@@ -1,256 +1,202 @@
-#%%  Check pd and b and ff
+#%% Check pd and b and ff - varyiable pr
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 
-def get_pDU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kDL * kLU * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
-
-
-def get_pDL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kDL * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
-
-
-def get_pDD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * (-((-1 + E2) * kDL * (kLD * (-kLU + kUL) + kDL * (kLU + kUL) - (kLU + kUL)**2)) + kDL * kLU * D + E2 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + 2 * E3 * kLD * kUL * D) / C
-
-
-def get_pLU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLU * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
-
-
-def get_pLL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * ((-1 + E2) * (kDL**2 * kLU - kLD * (kLD + kLU - kUL) * kUL - kDL * (kLD + kLU) * (kLU + kUL)) + kDL * kLU * D + E2 * kDL * kLU * D + 2 * E3 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
-
-
-def get_pLD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLD * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
-
-
-def get_pUU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * (-((-1 + E2) * kUL * (-kDL**2 - kLD * (kLD + kLU - kUL) + kDL * (-2 * kLD + kLU + kUL))) + 2 * E3 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
-
-
-def get_pUL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kUL * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
-
-
-def get_pUD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLD * kUL * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
 
 
 def get_next_state(s):
-    r=np.random.rand(1)
-    bounds=boundslist[int(s)]
-    if r<=bounds[0]:
+    r = np.random.rand()
+    bounds = boundslist[int(s)]
+
+    if r <= bounds[0]:
         return 0
-    if bounds[0]<r and r<=bounds[1]:
+    if r <= bounds[1]:
         return 1
-    if bounds[1]<r and r <= 1:
-        return 2
+    return 2
 
 
-kDL = 1
-kLD = 1
-kLU = 1
-kUL = 1
+kDL = 10
+kLD = 100
+kLU = 10
+kUL = 20
 
 M = 100
 f = 10
-pr = 0.1
+
+pr0 = 0.1
+prinf = 0.1
+thr = 10
+H = 2
 
 T = 1 / f
 naps = 100
-navgs=100
+navgs = 100
 
-puu = get_pUU(T)
-puL = get_pUL(T)
-pud = get_pUD(T)
+# Transition matrix
+P = get_transition_matrix(T)
 
-pLu = get_pLU(T)
-pLL = get_pLL(T)
-pLd = get_pLD(T)
+# Rows = final state, columns = initial state
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
 
-pdu = get_pDU(T)
-pdL = get_pDL(T)
-pdd = get_pDD(T)
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
 
-boundslist = [[puu,puu+puL,puu+puL+pud],
-          [pLu, pLu+pLL, pLu+pLL+pLd],
-          [pdu, pdu+pdL, pdu+pdL+pdd]]
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
 
-ds=np.zeros((navgs,naps,M))
-qc=np.zeros((navgs,naps))
+boundslist = [
+    [puu, puu + puL, puu + puL + pud],
+    [pLu, pLu + pLL, pLu + pLL + pLd],
+    [pdu, pdu + pdL, pdu + pdL + pdd]
+]
+
+# Hill function for release probability
+i_values = np.arange(naps)
+pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
+
+ds = np.zeros((navgs, naps, M))
+qc = np.zeros((navgs, naps))
 
 for iav in range(navgs):
     for iap in range(naps):
         for ids in range(M):
-            if iap==0:
-                state=0
+
+            if iap == 0:
+                state = 0
+
             else:
-                state=ds[iav,iap-1,ids]
-                if state==2 and np.random.rand() < pr:
-                    qc[iav,iap]+=1
-                    state=0
-                state=get_next_state(state)
-            ds[iav,iap,ids]=state
-            
-pavlist=[]
+                state = ds[iav, iap-1, ids]
+
+                if state == 2 and np.random.rand() < pr[iap]:
+                    qc[iav, iap] += 1
+                    state = 0
+
+                state = get_next_state(state)
+
+            ds[iav, iap, ids] = state
+
+
+pavlist = []
+
 for iav in range(navgs):
-    pilist=[]
+
+    pilist = []
+
     for iap in range(naps):
-        p0=np.sum(ds[iav,iap]==0)/M
-        p1=np.sum(ds[iav,iap]==1)/M
-        p2=np.sum(ds[iav,iap]==2)/M
-        pilist.append([p0,p1,p2])
-    pilist=np.array(pilist)
-    pavlist.append(pilist)
-pavlist=np.array(pavlist)
-pavg=np.mean(pavlist,axis=0)
 
-pusim=pavg[:, 0]
-pLsim=pavg[:, 1]
-pdsim=pavg[:, 2]
+        p0 = np.sum(ds[iav, iap] == 0) / M
+        p1 = np.sum(ds[iav, iap] == 1) / M
+        p2 = np.sum(ds[iav, iap] == 2) / M
 
-qcavg=np.mean(qc,axis=0)
+        pilist.append([p0, p1, p2])
+
+    pavlist.append(np.array(pilist))
+
+pavlist = np.array(pavlist)
+pavg = np.mean(pavlist, axis=0)
+
+pusim = pavg[:, 0]
+pLsim = pavg[:, 1]
+pdsim = pavg[:, 2]
+
+qcavg = np.mean(qc, axis=0)
 
 # FF of QC at each AP
-qcvar=np.var(qc,axis=0,ddof=1)
-qcff=qcvar/qcavg
+qcvar = np.var(qc, axis=0, ddof=1)
+qcff = qcvar / qcavg
 
-pL0=0
-pd0=0
-pu0=1
 
-pL=np.zeros(naps)
-pd=np.zeros(naps)
-pu=np.zeros(naps)
+# Theory
+pL0 = 0
+pd0 = 0
+pu0 = 1
 
-pL[0]=pL0
-pd[0]=pd0
-pu[0]=pu0
+pL = np.zeros(naps)
+pd = np.zeros(naps)
+pu = np.zeros(naps)
+
+pL[0] = pL0
+pd[0] = pd0
+pu[0] = pu0
 
 for i in range(naps-1):
 
     # p_d(i+1)
     pd[i+1] = (
-        pd[i]*(1-pr)*(1-pdu-pdL)
-        + pd[i]*pr*pud
-        + pu[i]*pud
-        + pL[i]*pLd
+        pd[i] * (1-pr[i]) * pdd
+        + pd[i] * pr[i] * pud
+        + pu[i] * pud
+        + pL[i] * pLd
     )
 
     # p_L(i+1)
     pL[i+1] = (
-        pL[i]*(1-pLu-pLd)
-        + pd[i]*(1-pr)*pdL
-        + pd[i]*pr*puL
-        + pu[i]*puL
+        pL[i] * (1-pLu-pLd)
+        + pd[i] * (1-pr[i]) * pdL
+        + pd[i] * pr[i] * puL
+        + pu[i] * puL
     )
 
     # p_u(i+1)
-    pu[i+1]=1-pL[i+1]-pd[i+1]
+    pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
 
 # Mean QC at each AP
-qc=np.zeros(naps)
-qc[1:]=M*pr*pd[:-1]
+qc = np.zeros(naps)
+qc[1:] = M * pr[1:] * pd[:-1]
 
 # FF QC theory
-qcff_theory=1-pr+pr*(1-pd[:-1])
+qcff_theory = 1 - pr[1:] * pd[:-1]
 
-# =============================================================================
-# plt.plot(pusim[1:],label='U simulation')
-# plt.plot(pu[1:],label='U theory')
-# =============================================================================
 
-plt.plot(pLsim[1:],label='pL(i) simulation')
-plt.plot(pL[1:],label='pL(i) theory')
+plt.plot(pLsim[1:], label='pL(i) simulation')
+plt.plot(pL[1:], label='pL(i) theory')
 
-plt.plot(pdsim[1:],label='pD(i) simulation')
-plt.plot(pd[1:],label='pD(i) theory')
+plt.plot(pdsim[1:], label='pD(i) simulation')
+plt.plot(pd[1:], label='pD(i) theory')
 
 plt.xlabel('AP stimulus number, i')
 plt.ylabel('Probability(i)')
 plt.legend()
 plt.show()
 
-fig,ax=plt.subplots(1,2,figsize=(8,5))
 
-ax[0].plot(qcavg[1:],label='Mean QC simulation')
-ax[0].plot(qc[1:],label='Mean QC theory')
+fig, ax = plt.subplots(1, 2, figsize=(8,5))
+
+ax[0].plot(qcavg[1:], label='Mean QC simulation')
+ax[0].plot(qc[1:], label='Mean QC theory')
 
 ax[0].set_xlabel('AP stimulus number, i')
 ax[0].set_ylabel('Mean QC')
 ax[0].legend()
 
-ax[1].plot(qcff[1:],label='FF simulation')
-ax[1].plot(qcff_theory,label='FF theory')
+ax[1].plot(qcff[1:], label='FF simulation')
+ax[1].plot(qcff_theory[1:], label='FF theory')
 
 ax[1].set_xlabel('AP stimulus number, i')
 ax[1].set_ylabel('FF')
 ax[1].legend()
 
 plt.tight_layout()
-
 plt.show()
 
-#%%  1 pool theory
+#%%  1 pool theory - python
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 
 kDL = 10
 kLD = 100
@@ -260,312 +206,43 @@ kUL = 20
 M = 100
 f = 10
 
-pr0 = 0.1
-prinf= 1
-thr = 20
-H = 2
-
-def get_pDU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kDL * kLU * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
-
-
-def get_pDL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kDL * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
-
-
-def get_pDD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * (-((-1 + E2) * kDL * (kLD * (-kLU + kUL) + kDL * (kLU + kUL) - (kLU + kUL)**2)) + kDL * kLU * D + E2 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + 2 * E3 * kLD * kUL * D) / C
-
-
-def get_pLU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLU * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
-
-
-def get_pLL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * ((-1 + E2) * (kDL**2 * kLU - kLD * (kLD + kLU - kUL) * kUL - kDL * (kLD + kLU) * (kLU + kUL)) + kDL * kLU * D + E2 * kDL * kLU * D + 2 * E3 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
-
-
-def get_pLD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLD * ((-1 + E2) * ((kLD - kLU - kUL) * kUL + kDL * (2 * kLU + kUL)) - kUL * D - E2 * kUL * D + 2 * E3 * kUL * D) / C
-
-
-def get_pUU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * (-((-1 + E2) * kUL * (-kDL**2 - kLD * (kLD + kLU - kUL) + kDL * (-2 * kLD + kLU + kUL))) + 2 * E3 * kDL * kLU * D + kDL * kUL * D + E2 * kDL * kUL * D + kLD * kUL * D + E2 * kLD * kUL * D) / C
-
-
-def get_pUL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kUL * ((-1 + E2) * (-kDL * (kDL + kLD - kLU) + (kDL + 2 * kLD) * kUL) - kDL * D - E2 * kDL * D + 2 * E3 * kDL * D) / C
-
-
-def get_pUD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(D * T)
-    E3 = np.exp(0.5 * (S + D) * T)
-    C = 2 * (kLD * kUL + kDL * (kLU + kUL)) * D
-    return E1 * kLD * kUL * (-((-1 + E2) * S) - D - E2 * D + 2 * E3 * D) / C
-
-
-def get_next_state(s):
-    r=np.random.rand(1)
-    bounds=boundslist[int(s)]
-    if r<=bounds[0]:
-        return 0
-    if bounds[0]<r and r<=bounds[1]:
-        return 1
-    if bounds[1]<r and r <= 1:
-        return 2
-
-
-
-T = 1 / f
-naps = 100
-navgs=100
-
-# Hill function for release probability
-i_values = np.arange(naps)
-pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
-
-puu = get_pUU(T)
-puL = get_pUL(T)
-pud = get_pUD(T)
-
-pLu = get_pLU(T)
-pLL = get_pLL(T)
-pLd = get_pLD(T)
-
-pdu = get_pDU(T)
-pdL = get_pDL(T)
-pdd = get_pDD(T)
-
-pL0=0
-pd0=0
-pu0=1
-
-pL=np.zeros(naps)
-pd=np.zeros(naps)
-pu=np.zeros(naps)
-
-pL[0]=pL0
-pd[0]=pd0
-pu[0]=pu0
-
-for i in range(naps-1):
-
-    # p_d(i+1)
-    pd[i+1] = (
-        pd[i]*(1-pr[i+1])*(1-pdu-pdL)
-        + pd[i]*pr[i+1]*pud
-        + pu[i]*pud
-        + pL[i]*pLd
-    )
-
-    # p_L(i+1)
-    pL[i+1] = (
-        pL[i]*(1-pLu-pLd)
-        + pd[i]*(1-pr[i+1])*pdL
-        + pd[i]*pr[i+1]*puL
-        + pu[i]*puL
-    )
-
-    # p_u(i+1)
-    pu[i+1]=1-pL[i+1]-pd[i+1]
-
-# Mean QC at each AP
-qc=np.zeros(naps)
-qc[1:]=M*pr[1:]*pd[:-1]
-
-# FF QC theory
-qcff_theory=1-pr[1:]*pd[:-1]
-
-fig,ax=plt.subplots(1,2,figsize=(8,5))
-
-ax[0].plot(qc[1:],label='Mean QC theory')
-
-ax[0].set_xlabel('AP stimulus number, i')
-ax[0].set_ylabel('Mean QC')
-ax[0].legend()
-
-ax[1].plot(qcff_theory,label='FF theory')
-
-ax[1].set_xlabel('AP stimulus number, i')
-ax[1].set_ylabel('FF')
-ax[1].legend()
-
-plt.tight_layout()
-
-plt.show()
-
-
-#%% one pool model - Lag-1 autocorrelation
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-# Model parameters
-kDL = 10
-kLD = 100
-kLU = 10
-kUL = 20
-
-M = 100
-
-f = 10
-T = 1 / f
-naps = 100
-
-# Release probability parameters
 pr0 = 0.1
 prinf = 0.1
 thr = 20
 H = 2
 
-# Release probability
-pr = np.zeros(naps)
+T = 1 / f
+naps = 100
+navgs = 100
 
-for i in range(naps):
-    pr[i] = pr0 + (prinf - pr0) / (1 + (i / thr)**H)
+# Continuous-time generator
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
 
+# Transition probabilities over one inter-AP interval
+P = get_transition_matrix(T)
 
-# Transition probabilities
+# Initial state, final state
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
 
-def get_pDU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
 
-    return (
-        kDL * (E1 - E2)
-        / D
-        + E1 * E2 * 0
-    )
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
 
-
-def get_pDL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
-
-    return kDL * (E2 - E1) / D
-
-
-def get_pDD(T):
-    return 1 - get_pDU(T) - get_pDL(T)
-
-
-def get_pLU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
-
-    return kLU * (E2 - E1) / D
-
-
-def get_pLD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
-
-    return kLD * (E2 - E1) / D
-
-
-def get_pLL(T):
-    return 1 - get_pLU(T) - get_pLD(T)
-
-
-def get_pUU(T):
-    return 1 - get_pUL(T) - get_pUD(T)
-
-
-def get_pUL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
-
-    return kUL * (E2 - E1) / D
-
-
-def get_pUD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4 * (kLD * kUL + kDL * (kLU + kUL)))
-    E1 = np.exp(-0.5 * (S + D) * T)
-    E2 = np.exp(-0.5 * (S - D) * T)
-
-    return (
-        kUL * kDL * (E1 - E2)
-        / (D * (kDL + kLD))
-    )
-
-
-# Transition probabilities
-pdu = get_pDU(T)
-pdL = get_pDL(T)
-pdd = get_pDD(T)
-
-puL = get_pUL(T)
-pud = get_pUD(T)
-puu = get_pUU(T)
-
-pLu = get_pLU(T)
-pLd = get_pLD(T)
-pLL = get_pLL(T)
-
-
-# State probabilities
+# Hill function for release probability
+i_values = np.arange(naps)
+pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
 
 pL0 = 0
 pd0 = 0
@@ -581,70 +258,221 @@ pu[0] = pu0
 
 for i in range(naps - 1):
 
+    # p_d(i+1)
     pd[i+1] = (
-        pd[i] * (1 - pr[i+1]) * (1 - pdu - pdL)
-        + pd[i] * pr[i+1] * pud
+        pd[i] * (1 - pr[i]) * pdd
+        + pd[i] * pr[i] * pud
         + pu[i] * pud
         + pL[i] * pLd
     )
 
+    # p_L(i+1)
     pL[i+1] = (
         pL[i] * (1 - pLu - pLd)
-        + pd[i] * (1 - pr[i+1]) * pdL
-        + pd[i] * pr[i+1] * puL
+        + pd[i] * (1 - pr[i]) * pdL
+        + pd[i] * pr[i] * puL
         + pu[i] * puL
     )
 
+    # p_u(i+1)
     pu[i+1] = 1 - pL[i+1] - pd[i+1]
 
-
-# Mean QC
+# Mean QC at each AP
 qc = np.zeros(naps)
 qc[1:] = M * pr[1:] * pd[:-1]
 
+# FF QC theory
+qcff_theory = 1 - pr[1:] * pd[:-1]
 
-# Valid AP indices for E[b_i b_(i+1)]
-i = np.arange(1, naps - 1)
+fig, ax = plt.subplots(1, 2, figsize=(8, 5))
 
+ax[0].plot(qc[1:], label='Mean QC theory')
+ax[0].set_xlabel('AP stimulus number, i')
+ax[0].set_ylabel('Mean QC')
+ax[0].legend()
 
-# E[b_i b_(i+1)]
-E_bibi1 = M**2 * pd[i-1] * pr[i] * pr[i+1] * (
-    pd[i-1] * (1 - pr[i]) * (1 - pdu - pdL)
-    + pd[i-1] * pr[i]
-    + pud
-)
+ax[1].plot(qcff_theory, label='FF theory')
+ax[1].set_xlabel('AP stimulus number, i')
+ax[1].set_ylabel('FF')
+ax[1].legend()
 
-
-# E[b_i] and E[b_(i+1)]
-mean_i = qc[i]
-mean_i1 = qc[i+1]
-
-
-# Var(b_i) and Var(b_(i+1))
-var_i = M * pr[i] * pd[i-1] * (1 - pr[i] * pd[i-1])
-var_i1 = M * pr[i+1] * pd[i] * (1 - pr[i+1] * pd[i])
-
-
-# Lag-1 covariance
-cov_lag1 = E_bibi1 - mean_i * mean_i1
-
-
-# Normalized lag-1 autocorrelation
-autocorr_lag1 = cov_lag1 / np.sqrt(var_i * var_i1)
-
-
-# Plot
-plt.figure(figsize=(6,5))
-plt.plot(i, autocorr_lag1)
-plt.xlabel('AP stimulus number, i')
-plt.ylabel(r'Lag-1 autocorrelation, $\rho_i$')
 plt.tight_layout()
 plt.show()
 
-#%%  E[b_i b_(i+j)]
+# =============================================================================
+# #%%  E[b_i b_(i+j)]
+# 
+# import numpy as np
+# import matplotlib.pyplot as plt
+# 
+# kDL = 10
+# kLD = 100
+# kLU = 10
+# kUL = 20
+# 
+# M = 100
+# f = 10
+# T = 1 / f
+# naps = 121
+# 
+# pr0 = 0.1
+# prinf = 0.1
+# thr = 20
+# H = 2
+# 
+# i = 20
+# 
+# def get_pDU(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return (kUL*kDL*(E1-E2) + kDL*(kUL+kLD+kLU)*(E2-E1) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+# 
+# def get_pDL(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return (kDL*kLU*(E1-E2) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+# 
+# def get_pDD(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return ((D+S-2*kLD)*(E1+E2) + (D+S-2*kLD)*(E2-E1))/(4*D)
+# 
+# def get_pLU(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return kUL*(E2-E1)/(2*D)
+# 
+# def get_pLL(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return ((D+S-2*kUL)*(E1+E2) + (D-S+2*kUL)*(E2-E1))/(4*D)
+# 
+# def get_pLD(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return kLD*(E2-E1)/(2*D)
+# 
+# def get_pUU(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return ((D+S-2*kUL-2*kDL)*(E1+E2) + (D-S+2*kUL+2*kDL)*(E2-E1))/(4*D)
+# 
+# def get_pUL(T):
+#     S = kDL + kLD + kLU + kUL
+#     D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
+#     E1 = np.exp(-0.5*(S+D)*T)
+#     E2 = np.exp(-0.5*(S-D)*T)
+#     return (kLD*(E2-E1) + kDL*(E2-E1))/(2*D)
+# 
+# def get_pUD(T):
+#     return 1-get_pUU(T)-get_pUL(T)
+# 
+# puu = get_pUU(T)
+# puL = get_pUL(T)
+# pud = get_pUD(T)
+# pLu = get_pLU(T)
+# pLL = get_pLL(T)
+# pLd = get_pLD(T)
+# pdu = get_pDU(T)
+# pdL = get_pDL(T)
+# pdd = get_pDD(T)
+# 
+# pr = pr0 + (prinf-pr0)/(1+(np.arange(naps)/thr)**H)
+# 
+# pL = np.zeros(naps)
+# pd = np.zeros(naps)
+# pu = np.zeros(naps)
+# 
+# pu[0] = 1
+# 
+# for n in range(naps-1):
+#     pd[n+1] = (
+#         pd[n]*(1-pr[n+1])*(1-pdu-pdL)
+#         + pd[n]*pr[n+1]*pud
+#         + pu[n]*pud
+#         + pL[n]*pLd
+#     )
+# 
+#     pL[n+1] = (
+#         pL[n]*(1-pLu-pLd)
+#         + pd[n]*(1-pr[n+1])*pdL
+#         + pd[n]*pr[n+1]*puL
+#         + pu[n]*puL
+#     )
+# 
+#     pu[n+1] = 1-pL[n+1]-pd[n+1]
+# 
+# p_ri = pd[i]*pr[i]
+# 
+# j_values = np.arange(1,101)
+# E_bibi_j = np.zeros(100)
+# 
+# for n,j in enumerate(j_values):
+# 
+#     pT = p_ri*pdu
+#     pL_joint = p_ri*puL
+#     pU = p_ri*puu
+# 
+#     for k in range(i+1,i+j):
+#         pT_new = (
+#             pT*(1-pr[k])*pdd
+#             + pT*pr[k]*pdu
+#             + pL_joint*pLd
+#             + pU*pdu
+#         )
+# 
+#         pL_new = (
+#             pT*(1-pr[k])*pdL
+#             + pT*pr[k]*puL
+#             + pL_joint*pLL
+#             + pU*puL
+#         )
+# 
+#         pU_new = p_ri-pT_new-pL_new
+# 
+#         pT = pT_new
+#         pL_joint = pL_new
+#         pU = pU_new
+# 
+#     p_ri_rij = pT*pr[i+j]
+#     p_rij = pd[i+j]*pr[i+j]
+# 
+#     E_bibi_j[n] = (
+#         M*p_ri_rij
+#         + M*(M-1)*p_ri*p_rij
+#     )
+# 
+# plt.figure(figsize=(7,5))
+# plt.plot(j_values,E_bibi_j,'o-')
+# plt.xlabel(r'$j$')
+# plt.ylabel(r'$E[b_i b_{i+j}]$')
+# # plt.title(r'$E[b_i b_{i+j}]$')
+# plt.tight_layout()
+# plt.show()
+# 
+# for j,value in zip(j_values,E_bibi_j):
+#     print(f'j = {j:3d}, E[b_i b_(i+j)] = {value:.8f}')
+#     
+# =============================================================================
+#%%  E[b_i b_(i+j)] matrix exponential
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 
 kDL = 10
 kLD = 100
@@ -654,286 +482,223 @@ kUL = 20
 M = 100
 f = 10
 T = 1 / f
-naps = 121
 
 pr0 = 0.1
 prinf = 0.1
 thr = 20
 H = 2
 
-i = 20
+i = 1
+j_max = 100
 
-def get_pDU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kUL*kDL*(E1-E2) + kDL*(kUL+kLD+kLU)*(E2-E1) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+# Maximum AP index that will be needed
+max_ap = i + j_max
 
-def get_pDL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kDL*kLU*(E1-E2) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
 
-def get_pDD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kLD)*(E1+E2) + (D+S-2*kLD)*(E2-E1))/(4*D)
+# Transition probabilities over one inter-AP interval
+P = get_transition_matrix(T)
+# this is the infinitesimal matrix which gives the transition rates for the markov chain between states
 
-def get_pLU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return kUL*(E2-E1)/(2*D)
 
-def get_pLL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kUL)*(E1+E2) + (D-S+2*kUL)*(E2-E1))/(4*D)
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
 
-def get_pLD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return kLD*(E2-E1)/(2*D)
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
 
-def get_pUU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kUL-2*kDL)*(E1+E2) + (D-S+2*kUL+2*kDL)*(E2-E1))/(4*D)
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
 
-def get_pUL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kLD*(E2-E1) + kDL*(E2-E1))/(2*D)
+# Release probability
+pr = pr0 + (prinf - pr0) / (1 + (np.arange(max_ap + 1) / thr)**H)
 
-def get_pUD(T):
-    return 1-get_pUU(T)-get_pUL(T)
-
-puu = get_pUU(T)
-puL = get_pUL(T)
-pud = get_pUD(T)
-pLu = get_pLU(T)
-pLL = get_pLL(T)
-pLd = get_pLD(T)
-pdu = get_pDU(T)
-pdL = get_pDL(T)
-pdd = get_pDD(T)
-
-pr = pr0 + (prinf-pr0)/(1+(np.arange(naps)/thr)**H)
-
-pL = np.zeros(naps)
-pd = np.zeros(naps)
-pu = np.zeros(naps)
+# Marginal state probabilities before each AP
+pL = np.zeros(max_ap + 1)
+pd = np.zeros(max_ap + 1)
+pu = np.zeros(max_ap + 1)
 
 pu[0] = 1
 
-for n in range(naps-1):
-    pd[n+1] = (
-        pd[n]*(1-pr[n+1])*(1-pdu-pdL)
-        + pd[n]*pr[n+1]*pud
-        + pu[n]*pud
-        + pL[n]*pLd
+for n in range(max_ap):
+
+    pd[n + 1] = (
+        pd[n] * (1 - pr[n]) * pdd
+        + pd[n] * pr[n] * pud
+        + pu[n] * pud
+        + pL[n] * pLd
     )
-    pL[n+1] = (
-        pL[n]*(1-pLu-pLd)
-        + pd[n]*(1-pr[n+1])*pdL
-        + pd[n]*pr[n+1]*puL
-        + pu[n]*puL
+
+    pL[n + 1] = (
+        pL[n] * (1 - pLu - pLd)
+        + pd[n] * (1 - pr[n]) * pdL
+        + pd[n] * pr[n] * puL
+        + pu[n] * puL
     )
-    pu[n+1] = 1-pL[n+1]-pd[n+1]
 
-p_ri = pd[i-1]*pr[i]
+    pu[n + 1] = 1 - pL[n + 1] - pd[n + 1]
 
-j_values = np.arange(1,101)
-E_bibi_j = np.zeros(100)
+# Probability that one particular site releases at AP i
+p_ri = pd[i] * pr[i]
 
-for n,j in enumerate(j_values):
+j_values = np.arange(1, j_max + 1)
+E_bibi_j = np.zeros(len(j_values))
 
-    pT = p_ri*pdu
-    pL_joint = p_ri*puL
-    pU = p_ri*puu
+for n, j in enumerate(j_values):
 
-    for k in range(i+1,i+j):
-        pT_new = (
-            pT*(1-pr[k])*pdd
-            + pT*pr[k]*pdu
-            + pL_joint*pLd
-            + pU*pdu
+    # After release at AP i, the site is in U.
+    # Therefore, at AP i+1:
+    #
+    # P(D_(i+1), b_i = 1) = p_ri * pdu
+    # P(L_(i+1), b_i = 1) = p_ri * puL
+    # P(U_(i+1), b_i = 1) = p_ri * puu
+
+    pD = p_ri * pud
+    pL_i = p_ri * puL
+    pU = p_ri * puu
+
+    # Propagate from AP i+1 to AP i+j
+    for k in range(i + 1, i + j):
+
+        pD_new = (
+            pD * (1 - pr[k]) * pdd
+            + pD * pr[k] * pud
+            + pL_i * pLd
+            + pU * pud
         )
 
         pL_new = (
-            pT*(1-pr[k])*pdL
-            + pT*pr[k]*puL
-            + pL_joint*pLL
-            + pU*puL
+            pD * (1 - pr[k]) * pdL
+            + pD * pr[k] * puL
+            + pL_i * pLL
+            + pU * puL
         )
 
-        pU_new = p_ri-pT_new-pL_new
+        pU_new = (
+            pD * (1 - pr[k]) * pdu
+            + pD * pr[k] * puu
+            + pL_i * pLu
+            + pU * puu
+        )
 
-        pT = pT_new
-        pL_joint = pL_new
+        pD = pD_new
+        pL_i = pL_new
         pU = pU_new
 
-    p_ri_rij = pT*pr[i+j]
-    p_rij = pd[i+j-1]*pr[i+j]
+    # Same-site contribution
+    p_ri_rij = pD * pr[i + j]
+
+    # Probability that a different site releases at AP i+j
+    p_rij = pd[i + j] * pr[i + j]
 
     E_bibi_j[n] = (
-        M*p_ri_rij
-        + M*(M-1)*p_ri*p_rij
+        M * p_ri_rij
+        + M * (M - 1) * p_ri * p_rij
     )
 
-plt.figure(figsize=(7,5))
-plt.plot(j_values,E_bibi_j,'o-')
+plt.figure(figsize=(7, 5))
+plt.plot(j_values, E_bibi_j, 'o-')
 plt.xlabel(r'$j$')
 plt.ylabel(r'$E[b_i b_{i+j}]$')
-# plt.title(r'$E[b_i b_{i+j}]$')
 plt.tight_layout()
 plt.show()
 
-for j,value in zip(j_values,E_bibi_j):
-    print(f'j = {j:3d}, E[b_i b_(i+j)] = {value:.8f}')
-    
-#%%  Pearson correlation coefficient
+for j, value in zip(j_values, E_bibi_j):
+    print(f'j = {j:3d}, E[b_i b_(i+j)] = {value:.8f}')    
+
+#%% Pearson correlation coefficient
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 
-kDL = 1
-kLD = 100
+kDL = 10
+kLD = 60
 kLU = 10
-kUL = 20
+kUL = 10 
 
 M = 100
 f = 10
 T = 1 / f
-max_j = 100
-naps = 121
 
 pr0 = 0.1
-prinf = 1
-thr = 20
+prinf = 0.1
+thr = 10
 H = 2
 
-i = 20
+i = 1
+j_max = 9
 
-def get_pDU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kUL*kDL*(E1-E2) + kDL*(kUL+kLD+kLU)*(E2-E1) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
 
-def get_pDL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kDL*kLU*(E1-E2) + kDL*D*(E1+E2))/(2*D*(kDL+kLU+kUL))
+# Transition probabilities over one inter-AP interval
+P = get_transition_matrix(T)
+# this is the infinitesimal matrix which gives the transition rates for the markov chain between states
 
-def get_pDD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kLD)*(E1+E2) + (D+S-2*kLD)*(E2-E1))/(4*D)
 
-def get_pLU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return kUL*(E2-E1)/(2*D)
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
 
-def get_pLL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kUL)*(E1+E2) + (D-S+2*kUL)*(E2-E1))/(4*D)
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
 
-def get_pLD(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return kLD*(E2-E1)/(2*D)
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
 
-def get_pUU(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return ((D+S-2*kUL-2*kDL)*(E1+E2) + (D-S+2*kUL+2*kDL)*(E2-E1))/(4*D)
+max_ap = i + j_max
 
-def get_pUL(T):
-    S = kDL + kLD + kLU + kUL
-    D = np.sqrt(S**2 - 4*(kLD*kUL + kDL*(kLU + kUL)))
-    E1 = np.exp(-0.5*(S+D)*T)
-    E2 = np.exp(-0.5*(S-D)*T)
-    return (kLD*(E2-E1) + kDL*(E2-E1))/(2*D)
+pr = pr0 + (prinf-pr0)/(1+(np.arange(max_ap+1)/thr)**H)
 
-def get_pUD(T):
-    return 1-get_pUU(T)-get_pUL(T)
-
-puu = get_pUU(T)
-puL = get_pUL(T)
-pud = get_pUD(T)
-
-pLu = get_pLU(T)
-pLL = get_pLL(T)
-pLd = get_pLD(T)
-
-pdu = get_pDU(T)
-pdL = get_pDL(T)
-pdd = get_pDD(T)
-
-pr = pr0 + (prinf-pr0)/(1+(np.arange(naps)/thr)**H)
-
-pL = np.zeros(naps)
-pd = np.zeros(naps)
-pu = np.zeros(naps)
+pL = np.zeros(max_ap+1)
+pd = np.zeros(max_ap+1)
+pu = np.zeros(max_ap+1)
 
 pu[0] = 1
 
-for n in range(naps-1):
+for n in range(max_ap):
 
     pd[n+1] = (
-        pd[n]*(1-pr[n+1])*(1-pdu-pdL)
-        + pd[n]*pr[n+1]*pud
+        pd[n]*(1-pr[n])*(1-pdu-pdL)
+        + pd[n]*pr[n]*pud
         + pu[n]*pud
         + pL[n]*pLd
     )
 
     pL[n+1] = (
         pL[n]*(1-pLu-pLd)
-        + pd[n]*(1-pr[n+1])*pdL
-        + pd[n]*pr[n+1]*puL
+        + pd[n]*(1-pr[n])*pdL
+        + pd[n]*pr[n]*puL
         + pu[n]*puL
     )
 
     pu[n+1] = 1-pL[n+1]-pd[n+1]
 
-p_ri = pd[i-1]*pr[i]
+p_ri = pd[i]*pr[i]
 
-j_values = np.arange(1,max_j+1)
-rho = np.zeros(max_j)
+j_values = np.arange(1,j_max+1)
+rho = np.zeros(j_max)
 
 for n,j in enumerate(j_values):
 
-    pT = p_ri*pdu
+    pT = p_ri*pud
     pL_joint = p_ri*puL
     pU = p_ri*puu
 
@@ -941,9 +706,9 @@ for n,j in enumerate(j_values):
 
         pT_new = (
             pT*(1-pr[k])*pdd
-            + pT*pr[k]*pdu
+            + pT*pr[k]*pud
             + pL_joint*pLd
-            + pU*pdu
+            + pU*pud
         )
 
         pL_new = (
@@ -960,7 +725,7 @@ for n,j in enumerate(j_values):
         pU = pU_new
 
     p_ri_rij = pT*pr[i+j]
-    p_rij = pd[i+j-1]*pr[i+j]
+    p_rij = pd[i+j]*pr[i+j]
 
     E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
 
@@ -980,10 +745,12 @@ plt.xlabel(r'$j$')
 plt.ylabel(r'$\rho(b_i,b_{i+j})$')
 # plt.title(r'$\rho(b_i,b_{i+j})$')
 plt.tight_layout()
+plt.grid(True)
 plt.show()
 
 for j,value in zip(j_values,rho):
     print(f'j = {j:3d}, rho = {value:.8f}')
+    
 
 #%% prinf sweep
 
@@ -1307,7 +1074,7 @@ for npools in pool_counts:
     )
 
 ax[1].set_xlabel('AP stimulus number, i')
-ax[1].set_ylabel('FF')
+ax[1].set_ylabel('Fano factor')
 ax[1].legend()
 
 plt.tight_layout()
@@ -1436,7 +1203,7 @@ for npools in pool_counts:
     ax[0].plot(
         i_values[1:],
         mean_qc_all[npools][1:],
-        label=f'{npools} pool'
+        label='{} pool, $k_{{LT}}={} \ Hz$'.format(npools,rate_params[npools-1][2])
     )
 
 ax[0].set_xlabel('AP stimulus number, i')
@@ -1451,9 +1218,282 @@ for npools in pool_counts:
     )
 
 ax[1].set_xlabel('AP stimulus number, i')
-ax[1].set_ylabel('FF')
+ax[1].set_ylabel('Fano factor')
 ax[1].legend()
 
 plt.tight_layout()
 plt.show()
 
+#%% multiple pools - optimize pools 2-4 to fixed pool 1 mean QC
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+from scipy.optimize import differential_evolution
+
+# Model parameters
+pool_counts = [1,2,3,4]
+
+M = 100
+
+f = 10
+T = 1 / f
+naps = 100
+
+i_values = np.arange(naps)
+
+# Each row: [pr0, prinf, thr, H]
+pr_params = np.array([
+    [0.1, 1.0, 20, 2],
+    [0.1, 0.2, 20, 2],
+    [0.1, 0.5, 20, 2],
+    [0.1, 0.3, 20, 2]
+])
+
+# Each row: [kUL, kLU, kLD, kDL]
+rate_params = np.array([
+    [20, 10, 100, 10],
+    [10, 1, 50, 1],
+    [10, 1, 50, 1],
+    [10, 1, 50, 1]
+])
+
+
+def get_transition_probs(T,kUL,kLU,kLD,kDL):
+
+    A = np.array([
+        [-kUL,               kLU,               0],
+        [ kUL, -(kLU + kLD),             kDL],
+        [   0,               kLD,           -kDL]
+    ])
+
+    P = expm(A.T*T)
+
+    pUU = P[0,0]
+    pUL = P[0,1]
+    pUD = P[0,2]
+
+    pLU = P[1,0]
+    pLL = P[1,1]
+    pLD = P[1,2]
+
+    pDU = P[2,0]
+    pDL = P[2,1]
+    pDD = P[2,2]
+
+    return pUU,pUL,pUD,pLU,pLL,pLD,pDU,pDL,pDD
+
+
+def get_mean_qc(pr_params,rate_params):
+
+    pr0,prinf,thr,H = pr_params
+    kUL,kLU,kLD,kDL = rate_params
+
+    pr = pr0 + (prinf-pr0)/(1+(i_values/thr)**H)
+
+    pUU,pUL,pUD,pLU,pLL,pLD,pDU,pDL,pDD = get_transition_probs(
+        T,kUL,kLU,kLD,kDL
+    )
+
+    pu = np.zeros(naps)
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+
+    pu[0] = 1
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i]*(1-pr[i+1])*(1-pDU-pDL)
+            +pd[i]*pr[i+1]*pUD
+            +pu[i]*pUD
+            +pL[i]*pLD
+        )
+
+        pL[i+1] = (
+            pL[i]*(1-pLU-pLD)
+            +pd[i]*(1-pr[i+1])*pDL
+            +pd[i]*pr[i+1]*pUL
+            +pu[i]*pUL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    q = pr[1:]*pd[:-1]
+
+    mean_qc = np.zeros(naps)
+    mean_qc[1:] = M*q
+
+    return mean_qc
+
+
+# ------------------------------------------------------------
+# FIRST POOL IS FIXED
+# Uses ONLY the first array in each parameter array
+# ------------------------------------------------------------
+
+mean_qc_1 = get_mean_qc(
+    pr_params[0],
+    rate_params[0]
+)
+
+mean_qc_all = {
+    1: mean_qc_1
+}
+
+optimized_params = np.zeros((4,8))
+
+optimized_params[0,:4] = pr_params[0]
+optimized_params[0,4:] = rate_params[0]
+
+
+# ------------------------------------------------------------
+# Optimize pools 2, 3, and 4 independently
+# to match the fixed first-pool mean QC
+# ------------------------------------------------------------
+
+bounds = [
+    (0.001,1.0),     # pr0
+    (0.001,1.0),     # prinf
+    (1.0,100.0),     # thr
+    (0.5,5.0),       # H
+    (0.1,100.0),     # kUL
+    (0.1,100.0),     # kLU
+    (0.1,100.0),     # kLD
+    (0.1,100.0)      # kDL
+]
+
+
+for pool in [2,3,4]:
+
+    def objective(x):
+
+        mean_qc = get_mean_qc(
+            x[:4],
+            x[4:]
+        )
+
+        valid = mean_qc_1 > 1e-8
+
+        relative_error = (
+            (mean_qc[valid]-mean_qc_1[valid])
+            /mean_qc_1[valid]
+        )
+
+        return np.mean(relative_error**2)
+
+
+    result = differential_evolution(
+        objective,
+        bounds,
+        maxiter=1000,
+        popsize=20,
+        tol=1e-9,
+        polish=True,
+        seed=pool
+    )
+
+    optimized_params[pool-1] = result.x
+
+    mean_qc_all[pool] = get_mean_qc(
+        result.x[:4],
+        result.x[4:]
+    )
+
+
+# ------------------------------------------------------------
+# Print parameters
+# ------------------------------------------------------------
+
+for pool in pool_counts:
+
+    print()
+    print(f'Pool {pool}')
+
+    print(f'pr0   = {optimized_params[pool-1,0]:.8f}')
+    print(f'prinf = {optimized_params[pool-1,1]:.8f}')
+    print(f'thr   = {optimized_params[pool-1,2]:.8f}')
+    print(f'H     = {optimized_params[pool-1,3]:.8f}')
+
+    print(f'kUL   = {optimized_params[pool-1,4]:.8f}')
+    print(f'kLU   = {optimized_params[pool-1,5]:.8f}')
+    print(f'kLD   = {optimized_params[pool-1,6]:.8f}')
+    print(f'kDL   = {optimized_params[pool-1,7]:.8f}')
+
+    error = np.mean(
+        (
+            (mean_qc_all[pool][1:]-mean_qc_1[1:])
+            /mean_qc_1[1:]
+        )**2
+    )
+
+    print(f'mean QC relative MSE = {error:.10e}')
+
+
+# ------------------------------------------------------------
+# Calculate Fano factor for each pool
+# ------------------------------------------------------------
+
+ff_all = {}
+
+for pool in pool_counts:
+
+    mean_qc = mean_qc_all[pool]
+
+    q = np.zeros(naps)
+
+    valid = mean_qc > 0
+    q[valid] = mean_qc[valid]/M
+
+    variance_qc = M*q*(1-q)
+
+    ff = np.zeros(naps)
+    ff[valid] = variance_qc[valid]/mean_qc[valid]
+
+    ff_all[pool] = ff
+
+
+# ------------------------------------------------------------
+# Plot mean QC
+# ------------------------------------------------------------
+
+fig,ax = plt.subplots(figsize=(7,5))
+
+for pool in pool_counts:
+
+    ax.plot(
+        i_values[1:],
+        mean_qc_all[pool][1:],
+        label=f'Pool {pool}'
+    )
+
+ax.set_xlabel('AP stimulus number, i')
+ax.set_ylabel('Mean QC')
+ax.legend()
+ax.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
+# ------------------------------------------------------------
+# Plot Fano factor
+# ------------------------------------------------------------
+
+fig,ax = plt.subplots(figsize=(7,5))
+
+for pool in pool_counts:
+
+    ax.plot(
+        i_values[1:],
+        ff_all[pool][1:],
+        label=f'Pool {pool}'
+    )
+
+ax.set_xlabel('AP stimulus number, i')
+ax.set_ylabel('Fano factor')
+ax.legend()
+ax.grid(True)
+
+plt.tight_layout()
+plt.show()
