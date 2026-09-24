@@ -3896,444 +3896,6 @@ H = 2
 
 i = 1
 
-pr_values = np.linspace(0.01,1,100)
-
-
-def calculate_rho(kDL,kLD,kLU,kUL):
-
-    # steady state
-    denom = kDL*kLU + kDL*kUL + kLD*kUL
-    puss = (kDL*kLU) / denom
-    pLss = (kDL*kUL) / denom
-    pdss = (kLD*kUL) / denom
-    initial_states = [puss,pLss,pdss]
-
-    # transition matrix
-    Q = np.array([
-        [-kUL,          kUL,          0],
-        [ kLU, -(kLU + kLD),         kLD],
-        [   0,           kDL,       -kDL]
-    ])
-
-    P = expm(Q*T)
-
-    puu = P[0,0]
-    puL = P[0,1]
-    pud = P[0,2]
-
-    pLu = P[1,0]
-    pLL = P[1,1]
-    pLd = P[1,2]
-
-    pdu = P[2,0]
-    pdL = P[2,1]
-    pdd = P[2,2]
-
-    rho_values = np.zeros(len(pr_values))
-
-    for m,pr0 in enumerate(pr_values):
-
-        prinf = pr0
-
-        pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
-
-        pL = np.zeros(3)
-        pd = np.zeros(3)
-        pu = np.zeros(3)
-
-        pu[0],pL[0],pd[0] = initial_states
-
-        for n in range(2):
-
-            pd[n+1] = (
-                pd[n]*(1-pr[n])*(1-pdu-pdL)
-                + pd[n]*pr[n]*pud
-                + pu[n]*pud
-                + pL[n]*pLd
-            )
-
-            pL[n+1] = (
-                pL[n]*(1-pLu-pLd)
-                + pd[n]*(1-pr[n])*pdL
-                + pd[n]*pr[n]*puL
-                + pu[n]*puL
-            )
-
-            pu[n+1] = 1-pL[n+1]-pd[n+1]
-
-        # rho(1,2), so j = 1
-        p_ri = pd[i]*pr[i]
-
-        pT = p_ri*pud
-        pL_joint = p_ri*puL
-        pU = p_ri*puu
-
-        p_ri_rij = pT*pr[i+1]
-        p_rij = pd[i+1]*pr[i+1]
-
-        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
-
-        E_bi = M*p_ri
-        E_bij = M*p_rij
-
-        var_bi = M*p_ri*(1-p_ri)
-        var_bij = M*p_rij*(1-p_rij)
-
-        cov_bibi_j = E_bibi_j-E_bi*E_bij
-
-        rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
-
-    # Minimum rho
-    min_index = np.argmin(rho_values)
-
-    return pr_values[min_index],rho_values[min_index]
-
-
-# Rate values to sweep
-rate_values = np.linspace(1,100,100)
-
-rates = {
-    r'$k_{DL}$': 'kDL',
-    r'$k_{LD}$': 'kLD',
-    r'$k_{LU}$': 'kLU',
-    r'$k_{UL}$': 'kUL'
-}
-
-pr_star = {}
-rho_min = {}
-
-for rate_name,rate_variable in rates.items():
-
-    pr_star[rate_variable] = np.zeros(len(rate_values))
-    rho_min[rate_variable] = np.zeros(len(rate_values))
-
-    for j,rate in enumerate(rate_values):
-
-        values = {
-            'kDL': kDL,
-            'kLD': kLD,
-            'kLU': kLU,
-            'kUL': kUL
-        }
-
-        values[rate_variable] = rate
-
-        pr_star[rate_variable][j],rho_min[rate_variable][j] = calculate_rho(
-            values['kDL'],
-            values['kLD'],
-            values['kLU'],
-            values['kUL']
-        )
-
-
-# Plot
-fs = 15
-
-fig,axs = plt.subplots(2,4,figsize=(20,9))
-
-for j,(rate_name,rate_variable) in enumerate(rates.items()):
-
-    # p_r* plot
-    axs[0,j].plot(
-        rate_values,
-        pr_star[rate_variable],
-        lw=5
-    )
-
-    axs[0,j].set_xlabel(
-        rate_name + r' (s$^{-1}$)',
-        fontsize=fs
-    )
-
-    axs[0,j].set_ylabel(
-        r'$p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_title(
-        r'Optimal $p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[0,j].grid(True,alpha=0.3)
-
-
-    # minimum rho plot
-    axs[1,j].plot(
-        rate_values,
-        rho_min[rate_variable],
-        lw=5
-    )
-
-    axs[1,j].set_xlabel(
-        rate_name + r' (s$^{-1}$)',
-        fontsize=fs
-    )
-
-    axs[1,j].set_ylabel(
-        r'$\rho_{\min}(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_title(
-        r'Minimum $\rho(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[1,j].grid(True,alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-#%% Optimal pr and minimum correlation as functions of each k rate
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.linalg import expm
-
-kDL = 5
-kLD = 50
-kLU = 5
-kUL = 50
-
-M = 100
-f = 100
-T = 1 / f
-
-thr = 10
-H = 2
-
-i = 1
-
-pr_values = np.linspace(0.01,1,100)
-
-
-def calculate_rho(kDL,kLD,kLU,kUL):
-
-    # steady state
-    denom = kDL*kLU + kDL*kUL + kLD*kUL
-    puss = (kDL*kLU) / denom
-    pLss = (kDL*kUL) / denom
-    pdss = (kLD*kUL) / denom
-    initial_states = [puss,pLss,pdss]
-
-    # transition matrix
-    Q = np.array([
-        [-kUL,          kUL,          0],
-        [ kLU, -(kLU + kLD),         kLD],
-        [   0,           kDL,       -kDL]
-    ])
-
-    P = expm(Q*T)
-
-    puu = P[0,0]
-    puL = P[0,1]
-    pud = P[0,2]
-
-    pLu = P[1,0]
-    pLL = P[1,1]
-    pLd = P[1,2]
-
-    pdu = P[2,0]
-    pdL = P[2,1]
-    pdd = P[2,2]
-
-    rho_values = np.zeros(len(pr_values))
-
-    for m,pr0 in enumerate(pr_values):
-
-        prinf = pr0
-
-        pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
-
-        pL = np.zeros(3)
-        pd = np.zeros(3)
-        pu = np.zeros(3)
-
-        pu[0],pL[0],pd[0] = initial_states
-
-        for n in range(2):
-
-            pd[n+1] = (
-                pd[n]*(1-pr[n])*(1-pdu-pdL)
-                + pd[n]*pr[n]*pud
-                + pu[n]*pud
-                + pL[n]*pLd
-            )
-
-            pL[n+1] = (
-                pL[n]*(1-pLu-pLd)
-                + pd[n]*(1-pr[n])*pdL
-                + pd[n]*pr[n]*puL
-                + pu[n]*puL
-            )
-
-            pu[n+1] = 1-pL[n+1]-pd[n+1]
-
-        # rho(1,2), so j = 1
-        p_ri = pd[i]*pr[i]
-
-        pT = p_ri*pud
-        pL_joint = p_ri*puL
-        pU = p_ri*puu
-
-        p_ri_rij = pT*pr[i+1]
-        p_rij = pd[i+1]*pr[i+1]
-
-        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
-
-        E_bi = M*p_ri
-        E_bij = M*p_rij
-
-        var_bi = M*p_ri*(1-p_ri)
-        var_bij = M*p_rij*(1-p_rij)
-
-        cov_bibi_j = E_bibi_j-E_bi*E_bij
-
-        rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
-
-    # Minimum rho
-    min_index = np.argmin(rho_values)
-
-    return pr_values[min_index],rho_values[min_index]
-
-
-# Rate values to sweep
-rate_values = np.linspace(1,100,100)
-
-rates = {
-    r'$k_{DL}$': 'kDL',
-    r'$k_{LD}$': 'kLD',
-    r'$k_{LU}$': 'kLU',
-    r'$k_{UL}$': 'kUL'
-}
-
-pr_star = {}
-rho_min = {}
-
-for rate_name,rate_variable in rates.items():
-
-    pr_star[rate_variable] = np.zeros(len(rate_values))
-    rho_min[rate_variable] = np.zeros(len(rate_values))
-
-    for j,rate in enumerate(rate_values):
-
-        values = {
-            'kDL': kDL,
-            'kLD': kLD,
-            'kLU': kLU,
-            'kUL': kUL
-        }
-
-        values[rate_variable] = rate
-
-        pr_star[rate_variable][j],rho_min[rate_variable][j] = calculate_rho(
-            values['kDL'],
-            values['kLD'],
-            values['kLU'],
-            values['kUL']
-        )
-
-
-# Plot
-fs = 15
-
-fig,axs = plt.subplots(2,4,figsize=(20,9))
-
-for j,(rate_name,rate_variable) in enumerate(rates.items()):
-
-    # p_r* plot
-    axs[0,j].plot(
-        rate_values/f,
-        pr_star[rate_variable],
-        lw=5
-    )
-
-    axs[0,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_ylabel(
-        r'$p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_title(
-        r'Optimal $p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[0,j].grid(True,alpha=0.3)
-
-
-    # minimum rho plot
-    axs[1,j].plot(
-        rate_values/f,
-        rho_min[rate_variable],
-        lw=5
-    )
-
-    axs[1,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_ylabel(
-        r'$\rho_{\min}(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_title(
-        r'Minimum $\rho(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[1,j].grid(True,alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-#%% Optimal pr and minimum correlation as functions of each k rate
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.linalg import expm
-
-kDL = 5
-kLD = 50
-kLU = 5
-kUL = 50
-
-M = 100
-f = 100
-T = 1 / f
-
-thr = 10
-H = 2
-
-i = 1
-
 pr_values = np.linspace(0.01,1,1500)
 
 
@@ -4464,122 +4026,17 @@ for rate_name,rate_variable in rates.items():
         )
 #%% plotting optimal pr and rho(1,2)
 
-# Plot
-fs = 15
+kfrangeDL = 1
+kfrangeLD = 4
+kfrangeLU = 2
+kfrangeUL = 3
 
-fig,axs = plt.subplots(2,4,figsize=(20,9))
-
-for j,(rate_name,rate_variable) in enumerate(rates.items()):
-
-    x = rate_values/f
-    y = rho_min[rate_variable]
-
-    # Find all k/f values where rho_min = -0.2
-    target = -0.2
-
-    crossing_indices = np.where(
-        (y[:-1]-target)*(y[1:]-target) <= 0
-    )[0]
-
-    kf_crossings = []
-
-    for n in crossing_indices:
-
-        if y[n+1] == y[n]:
-            kf_cross = x[n]
-        else:
-            kf_cross = x[n] + (target-y[n])*(x[n+1]-x[n])/(y[n+1]-y[n])
-
-        kf_crossings.append(kf_cross)
-
-    print(rate_name + r': $k/f$ =', kf_crossings)
-
-
-    # p_r* plot
-    axs[0,j].plot(
-        x,
-        pr_star[rate_variable],
-        lw=5
-    )
-
-    for kf_cross in kf_crossings:
-        axs[0,j].axvline(
-            kf_cross,
-            lw=2,
-            linestyle='--',
-            color='k'
-        )
-
-    axs[0,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_ylabel(
-        r'$p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_title(
-        r'Optimal $p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[0,j].grid(True,alpha=0.3)
-
-
-    # minimum rho plot
-    axs[1,j].plot(
-        x,
-        y,
-        lw=5
-    )
-
-    axs[1,j].axhline(
-        -0.2,
-        lw=2,
-        linestyle='--',
-        color='k'
-    )
-
-    for kf_cross in kf_crossings:
-        axs[1,j].axvline(
-            kf_cross,
-            lw=2,
-            linestyle='--',
-            color='k'
-        )
-
-    axs[1,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_ylabel(
-        r'$\rho_{\min}(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_title(
-        r'Minimum $\rho(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[1,j].grid(True,alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-#%% plotting optimal pr and rho(1,2)
+kf_ranges = {
+    'kDL': kfrangeDL,
+    'kLD': kfrangeLD,
+    'kLU': kfrangeLU,
+    'kUL': kfrangeUL
+}
 
 # Plot
 fs = 15
@@ -4652,20 +4109,23 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
             color='k'
         )
 
+    axs[0,j].set_xlim(
+        0,
+        kf_ranges[rate_variable]
+    )
+
     axs[0,j].set_xlabel(
         rate_name + r' / $f$',
         fontsize=fs
     )
 
-    axs[0,j].set_ylabel(
-        r'$p_r^*$',
-        fontsize=fs
-    )
-
-    axs[0,j].set_title(
-        r'Optimal $p_r^*$',
-        fontsize=fs
-    )
+    if j==0:
+        axs[0,j].set_ylabel(
+            'Minizing fusion probability of\nnormalized correlation coefficient, $p_r^*$',
+            fontsize=fs
+        )
+        
+# 'Minizing fusion probability of the\nnormalized correlation coefficient'
 
     axs[0,j].tick_params(
         axis='both',
@@ -4705,20 +4165,28 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
             color='k'
         )
 
+    axs[1,j].set_xlim(
+        0,
+        kf_ranges[rate_variable]
+    )
+
     axs[1,j].set_xlabel(
         rate_name + r' / $f$',
         fontsize=fs
     )
 
-    axs[1,j].set_ylabel(
-        r'$\rho_{\min}(1,2)$',
-        fontsize=fs
-    )
-
-    axs[1,j].set_title(
-        r'Minimum $\rho(1,2)$',
-        fontsize=fs
-    )
+    if j==0:
+        axs[1,j].set_ylabel(
+            'Minimum normalized correl-\nation coefficient of QC, $\\rho(1,2)$',
+            fontsize=fs
+        )
+# =============================================================================
+#     if j==0:
+#         axs[1,j].set_ylabel(
+#             r'$\rho_{\min}(1,2)$',
+#             fontsize=fs
+#         )
+# =============================================================================
 
     axs[1,j].tick_params(
         axis='both',
@@ -4729,6 +4197,180 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
 
 plt.tight_layout()
 plt.show()
+
+#%% plotting optimal pr and rho(1,2)
+
+kfrangeDL = 1
+kfrangeLD = 4
+kfrangeLU = 2
+kfrangeUL = 3
+
+kf_ranges = {
+    'kDL': kfrangeDL,
+    'kLD': kfrangeLD,
+    'kLU': kfrangeLU,
+    'kUL': kfrangeUL
+}
+
+rate_labels = {
+    'kDL': r'Normalized untightening rate, $k_{TL}/f$',
+    'kLD': r'Normalized tightening rate, $k_{LT}/f$',
+    'kLU': r'Normalized unloosening rate, $k_{LU}/f$',
+    'kUL': r'Normalized loosening rate, $k_{UL}/f$'
+}
+
+# Plot
+fs = 15
+
+fig,axs = plt.subplots(2,4,figsize=(20,9))
+
+for j,(rate_name,rate_variable) in enumerate(rates.items()):
+
+    x = rate_values/f
+    y = rho_min[rate_variable]
+
+    # Find all k/f values where rho_min = -0.2
+    target = -0.2
+
+    crossing_indices = np.where(
+        (y[:-1]-target)*(y[1:]-target) <= 0
+    )[0]
+
+    kf_crossings = []
+
+    for n in crossing_indices:
+
+        if y[n+1] == y[n]:
+            kf_cross = x[n]
+        else:
+            kf_cross = x[n] + (target-y[n])*(x[n+1]-x[n])/(y[n+1]-y[n])
+
+        kf_crossings.append(kf_cross)
+
+    print(rate_name + r': $k/f$ =', kf_crossings)
+
+
+    # Find regions where rho_min <= -0.2
+    boundaries = [x[0]] + kf_crossings + [x[-1]]
+
+    shaded_regions = []
+
+    for n in range(len(boundaries)-1):
+
+        x_left = boundaries[n]
+        x_right = boundaries[n+1]
+        x_mid = (x_left+x_right)/2
+
+        y_mid = np.interp(x_mid,x,y)
+
+        if y_mid <= target:
+            shaded_regions.append((x_left,x_right))
+
+
+    # p_r* plot
+    axs[0,j].plot(
+        x,
+        pr_star[rate_variable],
+        lw=5
+    )
+
+    for x_left,x_right in shaded_regions:
+        axs[0,j].axvspan(
+            x_left,
+            x_right,
+            color='pink',
+            alpha=0.3
+        )
+
+    for kf_cross in kf_crossings:
+        axs[0,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[0,j].set_xlim(
+        0,
+        kf_ranges[rate_variable]
+    )
+
+    axs[0,j].set_xlabel(
+        rate_labels[rate_variable],
+        fontsize=fs
+    )
+
+    if j==0:
+        axs[0,j].set_ylabel(
+            'Minizing fusion probability of\nnormalized correlation coefficient, $p_r^*$',
+            fontsize=fs
+        )
+
+    axs[0,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[0,j].grid(True,alpha=0.3)
+
+
+    # minimum rho plot
+    axs[1,j].plot(
+        x,
+        y,
+        lw=5
+    )
+
+    for x_left,x_right in shaded_regions:
+        axs[1,j].axvspan(
+            x_left,
+            x_right,
+            color='pink',
+            alpha=0.3
+        )
+
+    axs[1,j].axhline(
+        target,
+        lw=2,
+        linestyle='--',
+        color='k'
+    )
+
+    for kf_cross in kf_crossings:
+        axs[1,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[1,j].set_xlim(
+        0,
+        kf_ranges[rate_variable]
+    )
+
+    axs[1,j].set_xlabel(
+        rate_labels[rate_variable],
+        fontsize=fs
+    )
+
+    if j==0:
+        axs[1,j].set_ylabel(
+            'Minimum normalized correl-\nation coefficient of QC, $\\rho(1,2)$',
+            fontsize=fs
+        )
+
+    axs[1,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[1,j].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+
 #%% Pearson correlation coefficient - kinetic rate sweeps
 
 import numpy as np
