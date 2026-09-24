@@ -1,4 +1,4 @@
-#%% Check pd and b and ff - varyiable pr
+#%% Check pd and b and ff - varyiable pr - simulations vs theory
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
@@ -23,18 +23,20 @@ def get_next_state(s):
     return 2
 
 
-kDL = 10
-kLD = 100
-kLU = 10
-kUL = 20
+kDL = 5
+kLD = 10
+kLU = 5
+kUL = 10
 
 M = 100
 f = 10
 
 pr0 = 0.1
 prinf = 0.1
-thr = 10
+thr = 20
 H = 2
+
+state_init=2 #0=undocked,1=loosely docked,2=tightly docked
 
 T = 1 / f
 naps = 100
@@ -64,7 +66,7 @@ boundslist = [
 
 # Hill function for release probability
 i_values = np.arange(naps)
-pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
+pr = prinf + (pr0 - prinf) / (1 + (i_values / thr)**H)
 
 ds = np.zeros((navgs, naps, M))
 qc = np.zeros((navgs, naps))
@@ -74,7 +76,7 @@ for iav in range(navgs):
         for ids in range(M):
 
             if iap == 0:
-                state = 0
+                state = state_init
 
             else:
                 state = ds[iav, iap-1, ids]
@@ -86,7 +88,6 @@ for iav in range(navgs):
                 state = get_next_state(state)
 
             ds[iav, iap, ids] = state
-
 
 pavlist = []
 
@@ -117,11 +118,15 @@ qcavg = np.mean(qc, axis=0)
 qcvar = np.var(qc, axis=0, ddof=1)
 qcff = qcvar / qcavg
 
+def get_init_states(s):
+    if s==0:
+        return [1,0,0]
+    if s==1:
+        return [0,1,0]
+    if s==2:
+        return [0,0,1]
 
-# Theory
-pL0 = 0
-pd0 = 0
-pu0 = 1
+pu0, pL0, pd0 = get_init_states(state_init)
 
 pL = np.zeros(naps)
 pd = np.zeros(naps)
@@ -151,7 +156,6 @@ for i in range(naps-1):
 
     # p_u(i+1)
     pu[i+1] = 1 - pL[i+1] - pd[i+1]
-
 
 # Mean QC at each AP
 qc = np.zeros(naps)
@@ -192,28 +196,204 @@ ax[1].legend()
 plt.tight_layout()
 plt.show()
 
-#%%  1 pool theory - python
+#%% sim uldb
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+
+def simulate(nu, nL, nd, f, pr0, prinf, M, kuL, kLu, kLd, kdL, naps, delta_t, navgs):
+    
+    bmean=[]
+    
+    for _ in range(navgs):
+    
+        nulist=[]
+        nLlist=[]
+        ndlist=[]
+        tlist=[]
+        prelist=[]
+        blist=[]
+
+        tcurr=0
+        ratio = 0
+        timer = delta_t
+        bnum=0
+        e=1e-6
+        aptimer=1/f
+        while bnum<naps:
+            if bnum==0:
+                t0=0
+            else:
+                t0=aptimer
+            t1=exponential(1/(kuL*(M-nL-nd)+e)) # uL
+            t2=exponential(1/(kLu*nL+e))#Lu
+            t3=exponential(1/(kLd*nL+e))#Ld
+            t4=exponential(1/(kdL*nd+e))
+            t5 = timer
+            
+            times=[t0,t1,t2,t3,t4,t5]
+            minarg=np.argmin(times)
+            tmin=np.min(times)
+            
+            if minarg==0: # AP occurrs
+                b = binomial(nd, pr0)
+                if bnum==0:
+                    tlist.append(tcurr)
+                    nulist.append(nu)
+                    nLlist.append(nL)
+                    ndlist.append(nd)
+                blist.append(b)
+                nd-=b
+                nu+=b
+                nulist.append(nu)
+                nLlist.append(nL)
+                ndlist.append(nd)
+                tlist.append(tcurr+tmin)
+                tmin = t0
+                timer-=tmin
+                aptimer=1/f
+                prelist.append(tcurr+tmin)
+                bnum+=1
+    
+            elif minarg==1: #uL
+                nu-=1
+                nL+=1
+                tmin = t1
+                timer-=tmin
+                aptimer-=tmin
+
+            elif minarg==2: #Lu
+                nL-=1
+                nu+=1
+                tmin = t2
+                timer-=tmin
+                aptimer-=tmin
+                
+            elif minarg==3: #Ld
+                nL-=1
+                nd+=1
+                tmin = t3
+                timer-=tmin
+                aptimer-=tmin
+                
+            elif minarg==4: #uL
+                nd-=1
+                nL+=1
+                tmin = t4
+                timer-=tmin
+                aptimer-=tmin
+    
+            else:
+                tmin=t5
+                timer = delta_t
+                aptimer-=tmin
+                if tcurr >= ratio*naps/f:
+                    nulist.append(nu)
+                    nLlist.append(nL)
+                    ndlist.append(nd)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+        bmean.append(blist)
+    bmean=np.array(bmean)
+    bmean=np.mean(bmean,axis=0)
+    return tlist, nulist, nLlist, ndlist, prelist, blist, bmean
+
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+pr0 = 0.4
+prinf = 0.4
+thr = 20
+H = 2
+
+M = 100
+f = 100
+T = 1 / f
+delta_t=1e-4
+
+naps = 10
+navgs = 1000
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+ninit=[int(np.round(M*puss)),int(np.round(M*pLss)),int(np.round(M*pdss))]
+nsum=np.sum(ninit)
+
+nu,nL,nd=ninit
+
+res=simulate(nu, nL, nd, f, pr0, prinf, M, kUL, kLU, kLD, kDL, naps, delta_t, navgs)
+#     return tlist, nulist, nLlist, ndlist, prelist, blist
+fig,ax=plt.subplots(4,1)
+lw=2
+ax[0].step(res[0],res[1],where='post',linewidth=lw)
+ax[1].step(res[0],res[2],where='post',linewidth=lw)
+ax[2].step(res[0],res[3],where='post',linewidth=lw)
+
+alp=0.1
+for i in range(4):
+    ax[i].grid(axis='y',alpha=alp)
+    
+for i in range(4):
+    for x in res[4]:
+        ax[i].axvline(x,color='k',alpha=alp)
+
+ax[3].scatter(res[0],res[5][0]*np.ones(len(res[0])),marker='o',color='None')
+ax[3].scatter(res[4],res[5],linewidth=lw)
+ax[3].set_ylim([np.min(res[5])-4,np.max(res[5])+4])
+
+fs=15
+for i in range(4):
+    ax[i].set_xlim([-0.001,1/f*(naps-1)+0.001])
+    ax[i].set_xticks([])
+    ax[i].tick_params(axis='y',labelsize=fs)
+
+plt.tight_layout()
+
+bmean=res[6]
+
+#%%  1 pool theory 
 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
-kDL = 10
-kLD = 100
-kLU = 10
+kDL = 1
+kLD = 10
+kLU = 50
 kUL = 20
 
-M = 100
-f = 10
-
-pr0 = 0.1
-prinf = 0.1
+pr0 = 0.4
+prinf = 0.4
 thr = 20
 H = 2
 
+M = 100
+f = 10
 T = 1 / f
-naps = 100
+
+naps = 50
 navgs = 100
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+
+#               U,L,D
+# initial_states=[0,0,1]
 
 # Continuous-time generator
 def get_transition_matrix(T):
@@ -242,11 +422,9 @@ pdd = P[2,2]
 
 # Hill function for release probability
 i_values = np.arange(naps)
-pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
+pr = prinf + (pr0 - prinf) / (1 + (i_values / thr)**H)
 
-pL0 = 0
-pd0 = 0
-pu0 = 1
+pu0,pL0,pd0 = initial_states
 
 pL = np.zeros(naps)
 pd = np.zeros(naps)
@@ -286,12 +464,12 @@ qcff_theory = 1 - pr[1:] * pd[:-1]
 
 fig, ax = plt.subplots(1, 2, figsize=(8, 5))
 
-ax[0].plot(qc[1:], label='Mean QC theory')
+ax[0].plot(qc[1:], label='Mean QC theory',marker='o')
 ax[0].set_xlabel('AP stimulus number, i')
 ax[0].set_ylabel('Mean QC')
 ax[0].legend()
 
-ax[1].plot(qcff_theory, label='FF theory')
+ax[1].plot(qcff_theory, label='FF theory',marker='o')
 ax[1].set_xlabel('AP stimulus number, i')
 ax[1].set_ylabel('FF')
 ax[1].legend()
@@ -468,28 +646,2658 @@ plt.show()
 #     print(f'j = {j:3d}, E[b_i b_(i+j)] = {value:.8f}')
 #     
 # =============================================================================
-#%%  E[b_i b_(i+j)] matrix exponential
+#%% Correlation coefficient between n_D and n_L
 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
 kDL = 10
-kLD = 100
+kLD = 10
 kLU = 10
+kUL = 10
+
+pr0 = 0.1
+prinf = 1
+thr = 20
+H = 2
+
+M = 100
+f = 100
+T = 1 / f
+
+naps = 100
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states = [puss,pLss,pdss]
+
+# Continuous-time generator
+Q = np.array([
+    [-kUL,          kUL,          0],
+    [ kLU, -(kLU + kLD),         kLD],
+    [   0,           kDL,       -kDL]
+])
+
+P = expm(Q*T)
+
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+# Hill function for release probability
+i_values = np.arange(naps)
+
+pr = prinf + (pr0 - prinf) / (
+    1 + (i_values / thr)**H
+)
+
+# State probabilities
+pu = np.zeros(naps)
+pL = np.zeros(naps)
+pd = np.zeros(naps)
+
+pu[0],pL[0],pd[0] = initial_states
+
+for i in range(naps - 1):
+
+    pd[i+1] = (
+        pd[i] * (1 - pr[i]) * pdd
+        + pd[i] * pr[i] * pud
+        + pu[i] * pud
+        + pL[i] * pLd
+    )
+
+    pL[i+1] = (
+        pL[i] * (1 - pLu - pLd)
+        + pd[i] * (1 - pr[i]) * pdL
+        + pd[i] * pr[i] * puL
+        + pu[i] * puL
+    )
+
+    pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+# Multinomial covariance
+cov_dL = -M * pd * pL
+
+# Variances
+var_d = M * pd * (1 - pd)
+var_L = M * pL * (1 - pL)
+
+# Pearson correlation coefficient
+rho_dL = cov_dL / np.sqrt(var_d * var_L)
+
+# Equivalent closed-form expression
+rho_dL_check = -np.sqrt(
+    (pd * pL) /
+    ((1 - pd) * (1 - pL))
+)
+
+# Plot
+fig,ax = plt.subplots(figsize=(8,5))
+
+fs = 15
+lw = 3
+
+ax.plot(
+    range(1,naps+1),
+    rho_dL,
+    marker='o',
+    markersize=5,
+    linewidth=lw,
+    label=r'$\rho(n_D,n_L)$'
+)
+
+ax.axhline(0,linewidth=1)
+
+ax.set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax.set_ylabel(r'$\rho(n_D,n_L)$',fontsize=fs)
+ax.tick_params(axis='both',labelsize=fs)
+ax.legend(fontsize=12)
+
+plt.tight_layout()
+plt.show()
+#%% Correlation coefficient between n_D and n_L
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 10
+kLD = 10
+kLU = 10
+kUL = 10
+
+pr0 = 0.1
+prinf = 1
+thr = 20
+H = 2
+
+M = 100
+f = 100
+T = 1 / f
+
+# Number of APs for each test
+naps_fixed_pr = 20
+naps_variable_pr = 40
+naps_variable_k = 100
+
+# Manually chosen values
+pr_values = [0.1, 0.2, 0.4, 0.8]
+prinf_values = [0.1, 0.2, 0.4, 0.8]
+
+# ============================================================
+# Function to calculate rho(n_D,n_L)
+# ============================================================
+
+def calculate_rho(pr,kDL_values,kLD_values,kLU_values,kUL_values,naps):
+
+    pu = np.zeros(naps)
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+
+    # Initial steady state
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+
+    pu[0] = (kDL*kLU) / denom
+    pL[0] = (kDL*kUL) / denom
+    pd[0] = (kLD*kUL) / denom
+
+    for i in range(naps - 1):
+
+        Q = np.array([
+            [-kUL_values[i], kUL_values[i], 0],
+            [kLU_values[i], -(kLU_values[i] + kLD_values[i]), kLD_values[i]],
+            [0, kDL_values[i], -kDL_values[i]]
+        ])
+
+        P = expm(Q*T)
+
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLd = P[1,2]
+
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[i+1] = (
+            pd[i] * (1 - pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1 - pLu - pLd)
+            + pd[i] * (1 - pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+    # Multinomial covariance
+    cov_dL = -M * pd * pL
+
+    # Variances
+    var_d = M * pd * (1 - pd)
+    var_L = M * pL * (1 - pL)
+
+    # Pearson correlation coefficient
+    rho_dL = cov_dL / np.sqrt(var_d * var_L)
+
+    return rho_dL
+
+
+# ============================================================
+# Case 1: Fixed pr, different fixed pr values
+# ============================================================
+
+i_values = np.arange(naps_fixed_pr)
+
+kDL_values = np.full(naps_fixed_pr,kDL)
+kLD_values = np.full(naps_fixed_pr,kLD)
+kLU_values = np.full(naps_fixed_pr,kLU)
+kUL_values = np.full(naps_fixed_pr,kUL)
+
+rho_fixed_pr = []
+
+for pr_value in pr_values:
+
+    pr = np.full(naps_fixed_pr,pr_value)
+
+    rho = calculate_rho(
+        pr,
+        kDL_values,
+        kLD_values,
+        kLU_values,
+        kUL_values,
+        naps_fixed_pr
+    )
+
+    rho_fixed_pr.append(rho)
+
+
+# ============================================================
+# Case 2: Variable pr, different prinf values
+# ============================================================
+
+i_values = np.arange(naps_variable_pr)
+
+kDL_values = np.full(naps_variable_pr,kDL)
+kLD_values = np.full(naps_variable_pr,kLD)
+kLU_values = np.full(naps_variable_pr,kLU)
+kUL_values = np.full(naps_variable_pr,kUL)
+
+rho_variable_pr = []
+
+for prinf_value in prinf_values:
+
+    pr = prinf_value + (pr0 - prinf_value) / (
+        1 + (i_values / thr)**H
+    )
+
+    rho = calculate_rho(
+        pr,
+        kDL_values,
+        kLD_values,
+        kLU_values,
+        kUL_values,
+        naps_variable_pr
+    )
+
+    rho_variable_pr.append(rho)
+
+
+# ============================================================
+# Case 3: Fixed pr, vary one k at a time
+# ============================================================
+
+i_values = np.arange(naps_variable_k)
+
+kDL_values = np.full(naps_variable_k,kDL)
+kLD_values = np.full(naps_variable_k,kLD)
+kLU_values = np.full(naps_variable_k,kLU)
+kUL_values = np.full(naps_variable_k,kUL)
+
+# kDL
+kDL_increasing = 100 + (kDL - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kDL_decreasing = 1 + (kDL - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kLD
+kLD_increasing = 100 + (kLD - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kLD_decreasing = 1 + (kLD - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kLU
+kLU_increasing = 100 + (kLU - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kLU_decreasing = 1 + (kLU - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kUL
+kUL_increasing = 100 + (kUL - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kUL_decreasing = 1 + (kUL - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# Fixed pr
+pr_fixed = np.full(naps_variable_k,pr0)
+
+rho_k = []
+
+# kDL increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_increasing,
+    kLD_values,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kDL decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_decreasing,
+    kLD_values,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLD increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_increasing,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLD decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_decreasing,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLU increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_increasing,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLU decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_decreasing,
+    kUL_values,
+    naps_variable_k
+))
+
+# kUL increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_values,
+    kUL_increasing,
+    naps_variable_k
+))
+
+# kUL decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_values,
+    kUL_decreasing,
+    naps_variable_k
+))
+
+
+# ============================================================
+# Plot
+# ============================================================
+
+fig,ax = plt.subplots(1,3,figsize=(19,5))
+
+fs = 15
+lw = 3
+
+# ------------------------------------------------------------
+# Fixed pr
+# ------------------------------------------------------------
+
+for rho,pr_value in zip(rho_fixed_pr,pr_values):
+
+    ax[0].plot(
+        range(1,naps_fixed_pr+1),
+        rho,
+        linewidth=lw,
+        label=fr'$p_r={pr_value}$'
+    )
+
+ax[0].axhline(0,linewidth=1)
+
+ax[0].set_title('Fixed $p_r$',fontsize=fs)
+ax[0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[0].set_ylabel(r'Correlation coefficient $\rho(n_D,n_L)$',fontsize=fs)
+ax[0].tick_params(axis='both',labelsize=fs)
+ax[0].legend(fontsize=10)
+
+
+# ------------------------------------------------------------
+# Variable pr
+# ------------------------------------------------------------
+
+for rho,prinf_value in zip(rho_variable_pr,prinf_values):
+
+    ax[1].plot(
+        range(1,naps_variable_pr+1),
+        rho,
+        linewidth=lw,
+        label=fr'$p_{{r,\infty}}={prinf_value}$'
+    )
+
+ax[1].axhline(0,linewidth=1)
+
+ax[1].set_title('Variable $p_r$',fontsize=fs)
+ax[1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[1].set_ylabel(r'Correlation coefficient $\rho(n_D,n_L)$',fontsize=fs)
+ax[1].tick_params(axis='both',labelsize=fs)
+ax[1].legend(fontsize=10)
+
+
+# ------------------------------------------------------------
+# Variable k
+# ------------------------------------------------------------
+
+k_labels = [
+    r'$k_{DL}$',
+    r'$k_{LD}$',
+    r'$k_{LU}$',
+    r'$k_{UL}$'
+]
+
+k_pairs = [
+    (rho_k[0],rho_k[1]),
+    (rho_k[2],rho_k[3]),
+    (rho_k[4],rho_k[5]),
+    (rho_k[6],rho_k[7])
+]
+
+for label,(rho_increasing,rho_decreasing) in zip(k_labels,k_pairs):
+
+    line = ax[2].plot(
+        range(1,naps_variable_k+1),
+        rho_increasing,
+        linewidth=2.5,
+        linestyle='-',
+        marker='o',
+        markersize=5,
+        markevery=10,
+        label=label + ' increasing'
+    )[0]
+
+    ax[2].plot(
+        range(1,naps_variable_k+1),
+        rho_decreasing,
+        linewidth=2.5,
+        linestyle='--',
+        marker='s',
+        markersize=5,
+        markevery=10,
+        color=line.get_color(),
+        label=label + ' decreasing'
+    )
+
+ax[2].axhline(0,linewidth=1)
+
+ax[2].set_title('Fixed $p_r$, varying one $k$ at a time',fontsize=fs)
+ax[2].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[2].set_ylabel(r'Correlation coefficient $\rho(n_D,n_L)$',fontsize=fs)
+ax[2].tick_params(axis='both',labelsize=fs)
+ax[2].legend(fontsize=9,ncol=2)
+
+plt.tight_layout()
+plt.show()
+
+# =============================================================================
+# # ============================================================
+# # Plot
+# # ============================================================
+# 
+# fig,ax = plt.subplots(3,1,figsize=(10,15))
+# 
+# fs = 15
+# lw = 3
+# 
+# # ------------------------------------------------------------
+# # Fixed pr
+# # ------------------------------------------------------------
+# 
+# for rho,pr_value in zip(rho_fixed_pr,pr_values):
+# 
+#     ax[0].plot(
+#         range(1,naps_fixed_pr+1),
+#         rho,
+#         linewidth=lw,
+#         label=fr'$p_r={pr_value}$'
+#     )
+# 
+# ax[0].axhline(0,linewidth=1)
+# 
+# ax[0].set_title('Fixed $p_r$',fontsize=fs)
+# ax[0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+# ax[0].set_ylabel(r'$\rho(n_D,n_L)$',fontsize=fs)
+# ax[0].tick_params(axis='both',labelsize=fs)
+# ax[0].legend(fontsize=10)
+# 
+# 
+# # ------------------------------------------------------------
+# # Variable pr
+# # ------------------------------------------------------------
+# 
+# for rho,prinf_value in zip(rho_variable_pr,prinf_values):
+# 
+#     ax[1].plot(
+#         range(1,naps_variable_pr+1),
+#         rho,
+#         linewidth=lw,
+#         label=fr'$p_{{r,\infty}}={prinf_value}$'
+#     )
+# 
+# ax[1].axhline(0,linewidth=1)
+# 
+# ax[1].set_title('Variable $p_r$',fontsize=fs)
+# ax[1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+# ax[1].set_ylabel(r'$\rho(n_D,n_L)$',fontsize=fs)
+# ax[1].tick_params(axis='both',labelsize=fs)
+# ax[1].legend(fontsize=10)
+# 
+# 
+# # ------------------------------------------------------------
+# # Variable k
+# # ------------------------------------------------------------
+# 
+# k_labels = [
+#     r'$k_{DL}$',
+#     r'$k_{LD}$',
+#     r'$k_{LU}$',
+#     r'$k_{UL}$'
+# ]
+# 
+# k_pairs = [
+#     (rho_k[0],rho_k[1]),
+#     (rho_k[2],rho_k[3]),
+#     (rho_k[4],rho_k[5]),
+#     (rho_k[6],rho_k[7])
+# ]
+# 
+# for label,(rho_increasing,rho_decreasing) in zip(k_labels,k_pairs):
+# 
+#     line = ax[2].plot(
+#         range(1,naps_variable_k+1),
+#         rho_increasing,
+#         linewidth=2.5,
+#         linestyle='-',
+#         marker='o',
+#         markersize=5,
+#         markevery=10,
+#         label=label + ' increasing'
+#     )[0]
+# 
+#     ax[2].plot(
+#         range(1,naps_variable_k+1),
+#         rho_decreasing,
+#         linewidth=2.5,
+#         linestyle='--',
+#         marker='s',
+#         markersize=5,
+#         markevery=10,
+#         color=line.get_color(),
+#         label=label + ' decreasing'
+#     )
+# 
+# ax[2].axhline(0,linewidth=1)
+# 
+# ax[2].set_title('Fixed $p_r$, varying one $k$ at a time',fontsize=fs)
+# ax[2].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+# ax[2].set_ylabel(r'$\rho(n_D,n_L)$',fontsize=fs)
+# ax[2].tick_params(axis='both',labelsize=fs)
+# ax[2].legend(fontsize=9,ncol=2)
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
+#%% Correlation coefficient between n_D and n_L - comparison of p_r and kinetic-rate dynamics
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 10
+kLD = 10
+kLU = 10
+kUL = 10
+
+pr0 = 0.1
+prinf = 0.8
+thr = 20
+H = 2
+
+M = 100
+f = 100
+T = 1 / f
+
+naps = 50
+
+# Manually specified minimum and maximum values for kinetic rates
+rate_limits = {
+    'kDL': {'min': 0.1, 'max': 100},
+    'kLD': {'min': 0.1, 'max': 100},
+    'kLU': {'min': 0.1, 'max': 100},
+    'kUL': {'min': 0.1, 'max': 100}
+}
+
+rate_names = ['kDL','kLD','kLU','kUL']
+
+base_rates = {
+    'kDL': kDL,
+    'kLD': kLD,
+    'kLU': kLU,
+    'kUL': kUL
+}
+
+colors = {
+    'kDL': 'tab:blue',
+    'kLD': 'tab:orange',
+    'kLU': 'tab:green',
+    'kUL': 'tab:red'
+}
+
+# ============================================================
+# Initial steady state
+# ============================================================
+
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+
+initial_states = [puss,pLss,pdss]
+
+# ============================================================
+# Function to calculate rho(n_D,n_L)
+# ============================================================
+
+def calculate_rho(pr_values,k_values_dict):
+
+    # State probabilities
+    pu = np.zeros(naps)
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps - 1):
+
+        kDL_i = k_values_dict['kDL'][i]
+        kLD_i = k_values_dict['kLD'][i]
+        kLU_i = k_values_dict['kLU'][i]
+        kUL_i = k_values_dict['kUL'][i]
+
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pd[i+1] = (
+            pd[i] * (1 - pr_values[i]) * (1 - P[2,0] - P[2,1])
+            + pd[i] * pr_values[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1 - pLu - pLd)
+            + pd[i] * (1 - pr_values[i]) * P[2,1]
+            + pd[i] * pr_values[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+    # Multinomial covariance and variances
+    cov_dL = -M * pd * pL
+
+    var_d = M * pd * (1 - pd)
+    var_L = M * pL * (1 - pL)
+
+    rho = np.zeros(naps)
+
+    valid = (var_d > 0) & (var_L > 0)
+
+    rho[valid] = (
+        cov_dL[valid] /
+        np.sqrt(var_d[valid] * var_L[valid])
+    )
+
+    return rho
+
+
+# ============================================================
+# Case 1:
+# Fixed p_r, constant kinetic rates
+# Sweep each kinetic rate over several constant values
+# ============================================================
+
+rho_fixed_pr = {}
+
+pr_fixed = np.full(naps, pr0)
+
+rate_sweep_values = {
+    'kDL': [1, 5, 10, 20, 50, 100],
+    'kLD': [1, 5, 10, 20, 50, 100],
+    'kLU': [1, 5, 10, 20, 50, 100],
+    'kUL': [1, 5, 10, 20, 50, 100]
+}
+
+for rate_name in rate_names:
+
+    rho_fixed_pr[rate_name] = {}
+
+    for rate in rate_sweep_values[rate_name]:
+
+        k_values_dict = {
+            'kDL': np.full(naps,kDL),
+            'kLD': np.full(naps,kLD),
+            'kLU': np.full(naps,kLU),
+            'kUL': np.full(naps,kUL)
+        }
+
+        k_values_dict[rate_name] = np.full(naps,rate)
+
+        rho_fixed_pr[rate_name][rate] = calculate_rho(
+            pr_fixed,
+            k_values_dict
+        )
+
+
+# ============================================================
+# Case 2 and Case 3:
+# Hill-varying kinetic rates
+# ============================================================
+
+rho_variable_pr = {}
+rho_fixed_pr_hill = {}
+
+i_values = np.arange(naps)
+
+pr_variable = prinf + (pr0 - prinf) / (
+    1 + (i_values / thr)**H
+)
+
+for rate_name in rate_names:
+
+    rho_variable_pr[rate_name] = {}
+    rho_fixed_pr_hill[rate_name] = {}
+
+    k0 = base_rates[rate_name]
+    kmin = rate_limits[rate_name]['min']
+    kmax = rate_limits[rate_name]['max']
+
+    # --------------------------------------------------------
+    # Increasing k
+    # --------------------------------------------------------
+
+    k_increasing = kmax + (k0 - kmax) / (
+        1 + (i_values / thr)**H
+    )
+
+    k_values_dict = {
+        'kDL': np.full(naps,kDL),
+        'kLD': np.full(naps,kLD),
+        'kLU': np.full(naps,kLU),
+        'kUL': np.full(naps,kUL)
+    }
+
+    k_values_dict[rate_name] = k_increasing
+
+    rho_variable_pr[rate_name]['increasing'] = calculate_rho(
+        pr_variable,
+        k_values_dict
+    )
+
+    rho_fixed_pr_hill[rate_name]['increasing'] = calculate_rho(
+        pr_fixed,
+        k_values_dict
+    )
+
+    # --------------------------------------------------------
+    # Decreasing k
+    # --------------------------------------------------------
+
+    k_decreasing = kmin + (k0 - kmin) / (
+        1 + (i_values / thr)**H
+    )
+
+    k_values_dict = {
+        'kDL': np.full(naps,kDL),
+        'kLD': np.full(naps,kLD),
+        'kLU': np.full(naps,kLU),
+        'kUL': np.full(naps,kUL)
+    }
+
+    k_values_dict[rate_name] = k_decreasing
+
+    rho_variable_pr[rate_name]['decreasing'] = calculate_rho(
+        pr_variable,
+        k_values_dict
+    )
+
+    rho_fixed_pr_hill[rate_name]['decreasing'] = calculate_rho(
+        pr_fixed,
+        k_values_dict
+    )
+
+
+# ============================================================
+# Plot
+# ============================================================
+
+fig,ax = plt.subplots(1,3,figsize=(18,5),sharey=True)
+
+fs = 15
+lw = 2.5
+
+# ------------------------------------------------------------
+# Panel 1: Fixed pr, constant kinetic rates
+# ------------------------------------------------------------
+
+for rate_name in rate_names:
+
+    for rate in rate_sweep_values[rate_name]:
+
+        ax[0].plot(
+            range(1,naps+1),
+            rho_fixed_pr[rate_name][rate],
+            color=colors[rate_name],
+            linewidth=lw,
+            alpha=0.8,
+            label=fr'${rate_name}={rate}$'
+        )
+
+ax[0].set_title(r'Fixed $p_r$, constant $k$',fontsize=fs)
+ax[0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[0].set_ylabel(r'$\rho(n_D,n_L)$',fontsize=fs)
+ax[0].tick_params(axis='both',labelsize=fs)
+
+# ------------------------------------------------------------
+# Panel 2: Variable pr, Hill-varying k
+# ------------------------------------------------------------
+
+for rate_name in rate_names:
+
+    ax[1].plot(
+        range(1,naps+1),
+        rho_variable_pr[rate_name]['increasing'],
+        color=colors[rate_name],
+        linewidth=lw,
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Increasing'
+    )
+
+    ax[1].plot(
+        range(1,naps+1),
+        rho_variable_pr[rate_name]['decreasing'],
+        color=colors[rate_name],
+        linewidth=lw,
+        linestyle='--',
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Decreasing'
+    )
+
+ax[1].set_title(r'Variable $p_r(i)$, Hill-varying $k(i)$',fontsize=fs)
+ax[1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[1].tick_params(axis='both',labelsize=fs)
+
+# ------------------------------------------------------------
+# Panel 3: Fixed pr, Hill-varying k
+# ------------------------------------------------------------
+
+for rate_name in rate_names:
+
+    ax[2].plot(
+        range(1,naps+1),
+        rho_fixed_pr_hill[rate_name]['increasing'],
+        color=colors[rate_name],
+        linewidth=lw,
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Increasing'
+    )
+
+    ax[2].plot(
+        range(1,naps+1),
+        rho_fixed_pr_hill[rate_name]['decreasing'],
+        color=colors[rate_name],
+        linewidth=lw,
+        linestyle='--',
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Decreasing'
+    )
+
+ax[2].set_title(r'Fixed $p_r$, Hill-varying $k(i)$',fontsize=fs)
+ax[2].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[2].tick_params(axis='both',labelsize=fs)
+
+# ------------------------------------------------------------
+# Legend
+# ------------------------------------------------------------
+
+handles,labels = ax[2].get_legend_handles_labels()
+
+fig.legend(
+    handles,
+    labels,
+    fontsize=11,
+    ncol=4,
+    loc='upper center',
+    bbox_to_anchor=(0.5,1.05)
+)
+
+plt.tight_layout()
+plt.subplots_adjust(top=0.82)
+
+plt.show()
+#%%  1 pool theory - pr constant sweep
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 1
+kLD = 10
+kLU = 50
 kUL = 20
 
 M = 100
 f = 10
 T = 1 / f
 
+naps = 20
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states = [puss,pLss,pdss]
+
+pr_values = [0.1,0.13,0.16,0.2]
+
+
+# Continuous-time generator
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+
+# Transition matrix
+P = get_transition_matrix(T)
+
+# Initial state, final state
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+i_values = np.arange(naps-1)
+
+mean_qc_all = {}
+ff_all = {}
+
+for pr_value in pr_values:
+
+    # Constant release probability
+    pr = np.full(naps, pr_value)
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    # State immediately before AP 1
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        # State immediately before AP i+1
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+    # Mean QC at each AP
+    qc = np.zeros(naps)
+    qc= M * pr * pd
+
+    # Fano factor at each AP
+    qcff_theory = 1 - pr * pd
+
+    mean_qc_all[pr_value] = qc
+    ff_all[pr_value] = qcff_theory
+
+fig, ax = plt.subplots(1, 2, figsize=(8, 5))
+
+for pr_value in pr_values:
+    ax[0].plot(
+        range(1,naps+1),
+        mean_qc_all[pr_value],
+        label=f'$p_r={pr_value}$'
+    )
+
+ax[0].set_xlabel('AP stimulus number, i')
+ax[0].set_ylabel('Mean QC')
+ax[0].legend()
+
+for pr_value in pr_values:
+    ax[1].plot(
+        range(1,naps+1),
+        ff_all[pr_value],
+        label=f'$p_r={pr_value}$'
+    )
+
+ax[1].set_xlabel('AP stimulus number, i')
+ax[1].set_ylabel('Fano factor')
+ax[1].legend()
+
+plt.tight_layout()
+plt.show()
+#%% 1 pool theory - Hill pr sweep
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+#s
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+thr = 4
+H = 2
+
+M = 100
+f = 10
+T = 1 / f
+
+naps = 20
+navgs = 100
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+#e
 pr0 = 0.1
-prinf = 0.1
-thr = 20
+prinf_values = [0.1, 0.2, 0.3, 0.4]
+
+# Continuous-time generator
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+# Transition matrix
+P = get_transition_matrix(T)
+
+# Initial state, final state
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+i_values = np.arange(naps)
+
+mean_qc_all = {}
+ff_all = {}
+
+for prinf in prinf_values:
+
+    # Hill function for release probability
+    i_hill = np.arange(naps)
+
+    pr = prinf + (pr0-prinf) / (
+        1 + (i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    #               U,L,D
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps - 1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+    # Mean QC at each AP
+    qc = np.zeros(naps)
+    qc = M * pr * pd
+
+    # Fano factor at each AP
+    qcff_theory = 1 - pr * pd
+
+    mean_qc_all[prinf] = qc
+    ff_all[prinf] = qcff_theory
+
+fig, ax = plt.subplots(1, 2, figsize=(8, 5))
+
+for prinf in prinf_values:
+    ax[0].plot(
+        range(1,naps+1),
+        mean_qc_all[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$'
+    )
+
+ax[0].set_xlabel('AP stimulus number, i')
+ax[0].set_ylabel('Mean QC')
+ax[0].legend()
+
+for prinf in prinf_values:
+    ax[1].plot(
+        range(1,naps+1),
+        ff_all[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$'
+    )
+
+ax[1].set_xlabel('AP stimulus number, i')
+ax[1].set_ylabel('Fano factor')
+ax[1].legend()
+
+plt.tight_layout()
+plt.show()
+
+#%% Both combined - constant pr and hill pr
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states = [puss,pLss,pdss]
+
+# Continuous-time generator
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+P = get_transition_matrix(T)
+
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+# Constant pr sweep
+pr_values = [0.1,0.13,0.16,0.2]
+
+mean_qc_constant = {}
+ff_constant = {}
+
+for pr_value in pr_values:
+
+    pr = np.full(naps,pr_value)
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_constant[pr_value] = M * pr * pd
+    ff_constant[pr_value] = 1-pr*pd
+
+# Hill pr sweep
+thr = 4
+H = 2
+
+pr0 = 0.1
+prinf_values = [0.1,0.2,0.3,0.4]
+
+mean_qc_hill = {}
+ff_hill = {}
+
+for prinf in prinf_values:
+
+    i_hill = np.arange(naps)
+
+    pr = prinf + (pr0-prinf) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_hill[prinf] = M * pr * pd
+    ff_hill[prinf] = 1-pr*pd
+
+# Plot
+fig,ax = plt.subplots(2,2,figsize=(9,7),sharex=True)
+
+fs=15
+mks=5
+lw=3
+
+for pr_value in pr_values:
+    ax[0,0].plot(
+        range(1,naps+1),
+        mean_qc_constant[pr_value],
+        label=f'$p_r={pr_value}$',
+        marker='o', markersize=mks,linewidth=lw
+    )
+
+ax[0,0].set_ylabel('Mean QC',fontsize=fs)
+ax[0,0].set_title('Constant $p_r$',fontsize=fs)
+ax[0,0].tick_params(axis='both',labelsize=fs)
+ax[0,0].legend(fontsize=fs)
+
+for pr_value in pr_values:
+    ax[0,1].plot(
+        range(1,naps+1),
+        ff_constant[pr_value],
+        label=f'$p_r={pr_value}$',
+        marker='o', markersize=mks,linewidth=lw
+    )
+
+ax[0,1].set_ylabel('Fano factor',fontsize=fs)
+ax[0,1].set_title('Constant $p_r$',fontsize=fs)
+ax[0,1].tick_params(axis='both',labelsize=fs)
+ax[0,1].legend(fontsize=fs)
+
+for prinf in prinf_values:
+    ax[1,0].plot(
+        range(1,naps+1),
+        mean_qc_hill[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$',
+        marker='o', markersize=mks,linewidth=lw
+    )
+
+ax[1,0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[1,0].set_ylabel('Mean QC',fontsize=fs)
+ax[1,0].set_title('Hill $p_r$',fontsize=fs)
+ax[1,0].tick_params(axis='both',labelsize=fs)
+ax[1,0].legend(fontsize=fs)
+
+for prinf in prinf_values:
+    ax[1,1].plot(
+        range(1,naps+1),
+        ff_hill[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$',
+        marker='o', markersize=mks,linewidth=lw
+    )
+
+ax[1,1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[1,1].set_ylabel('Fano factor',fontsize=fs)
+ax[1,1].set_title('Hill $p_r$',fontsize=fs)
+ax[1,1].tick_params(axis='both',labelsize=fs)
+ax[1,1].legend(fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+#%% Both combined - fixed pr and kinetic rate sweeps
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+pr = 0.2
+
+kDL_values = [0.5, 1, 2, 4]
+kLD_values = [5, 10, 20, 40]
+kLU_values = [25, 50, 100, 200]
+kUL_values = [10, 20, 40, 80]
+
+# Calculation
+
+mean_qc_all = {}
+ff_all = {}
+
+for rate_name, rate_values in [
+    ('kDL', kDL_values),
+    ('kLD', kLD_values),
+    ('kLU', kLU_values),
+    ('kUL', kUL_values)
+]:
+
+    mean_qc_all[rate_name] = {}
+    ff_all[rate_name] = {}
+
+    for rate in rate_values:
+
+        kDL_current = kDL
+        kLD_current = kLD
+        kLU_current = kLU
+        kUL_current = kUL
+
+        if rate_name == 'kDL':
+            kDL_current = rate
+        elif rate_name == 'kLD':
+            kLD_current = rate
+        elif rate_name == 'kLU':
+            kLU_current = rate
+        elif rate_name == 'kUL':
+            kUL_current = rate
+
+        # steady state
+        denom = kDL_current*kLU_current + kDL_current*kUL_current + kLD_current*kUL_current
+        puss = (kDL_current*kLU_current) / denom
+        pLss = (kDL_current*kUL_current) / denom
+        pdss = (kLD_current*kUL_current) / denom
+        initial_states = [puss,pLss,pdss]
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_current,          kUL_current,          0],
+            [ kLU_current, -(kLU_current + kLD_current),         kLD_current],
+            [   0,           kDL_current,       -kDL_current]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pL = np.zeros(naps)
+        pd = np.zeros(naps)
+        pu = np.zeros(naps)
+
+        pu[0],pL[0],pd[0] = initial_states
+
+        for i in range(naps-1):
+
+            pd[i+1] = (
+                pd[i] * (1-pr) * pdd
+                + pd[i] * pr * pud
+                + pu[i] * pud
+                + pL[i] * pLd
+            )
+
+            pL[i+1] = (
+                pL[i] * (1-pLu-pLd)
+                + pd[i] * (1-pr) * pdL
+                + pd[i] * pr * puL
+                + pu[i] * puL
+            )
+
+            pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+        mean_qc_all[rate_name][rate] = M * pr * pd
+        ff_all[rate_name][rate] = 1-pr*pd
+
+# Plot
+
+fig,ax = plt.subplots(2,4,figsize=(16,7),sharex=True)
+
+fs=15
+mks=5
+lw=3
+
+rate_names = ['kDL','kLD','kLU','kUL']
+rate_values_all = [kDL_values,kLD_values,kLU_values,kUL_values]
+
+for j,rate_name in enumerate(rate_names):
+
+    for rate in rate_values_all[j]:
+        ax[0,j].plot(
+            range(1,naps+1),
+            mean_qc_all[rate_name][rate],
+            label=f'${rate_name}={rate}$',
+            marker='o', markersize=mks,linewidth=lw
+        )
+
+    ax[0,j].set_title(fr'Varying ${rate_name}$',fontsize=fs)
+    ax[0,j].set_ylabel('Mean QC',fontsize=fs)
+    ax[0,j].tick_params(axis='both',labelsize=fs)
+    ax[0,j].legend(fontsize=12)
+
+    for rate in rate_values_all[j]:
+        ax[1,j].plot(
+            range(1,naps+1),
+            ff_all[rate_name][rate],
+            label=f'${rate_name}={rate}$',
+            marker='o', markersize=mks,linewidth=lw
+        )
+
+    ax[1,j].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+    ax[1,j].set_ylabel('Fano factor',fontsize=fs)
+    ax[1,j].tick_params(axis='both',labelsize=fs)
+    ax[1,j].legend(fontsize=12)
+
+plt.tight_layout()
+plt.show()
+
+#%% Hill pr - fixed pr0 and prinf, kinetic rate sweeps
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 10
+kLD = 10
+kLU = 10
+kUL = 10
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+pr0 = 0.4
+prinf = 1
+
+thr = 4
+H = 2
+
+kDL_values = [1, 10, 50, 100]
+kLD_values = [1, 10, 50, 100]
+kLU_values = [1, 10, 50, 100]
+kUL_values = [1, 10, 50, 100]
+
+# Calculation
+
+mean_qc_all = {}
+ff_all = {}
+
+for rate_name, rate_values in [
+    ('kDL', kDL_values),
+    ('kLD', kLD_values),
+    ('kLU', kLU_values),
+    ('kUL', kUL_values)
+]:
+
+    mean_qc_all[rate_name] = {}
+    ff_all[rate_name] = {}
+
+    for rate in rate_values:
+
+        kDL_current = kDL
+        kLD_current = kLD
+        kLU_current = kLU
+        kUL_current = kUL
+
+        if rate_name == 'kDL':
+            kDL_current = rate
+        elif rate_name == 'kLD':
+            kLD_current = rate
+        elif rate_name == 'kLU':
+            kLU_current = rate
+        elif rate_name == 'kUL':
+            kUL_current = rate
+
+        # Hill release probability
+        i_hill = np.arange(naps)
+        pr = prinf + (pr0-prinf) / (
+            1+(i_hill/thr)**H
+        )
+
+        # steady state
+        denom = kDL_current*kLU_current + kDL_current*kUL_current + kLD_current*kUL_current
+        puss = (kDL_current*kLU_current) / denom
+        pLss = (kDL_current*kUL_current) / denom
+        pdss = (kLD_current*kUL_current) / denom
+        initial_states = [puss,pLss,pdss]
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_current,          kUL_current,          0],
+            [ kLU_current, -(kLU_current + kLD_current),         kLD_current],
+            [   0,           kDL_current,       -kDL_current]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pL = np.zeros(naps)
+        pd = np.zeros(naps)
+        pu = np.zeros(naps)
+
+        pu[0],pL[0],pd[0] = initial_states
+
+        for i in range(naps-1):
+
+            pd[i+1] = (
+                pd[i] * (1-pr[i]) * pdd
+                + pd[i] * pr[i] * pud
+                + pu[i] * pud
+                + pL[i] * pLd
+            )
+
+            pL[i+1] = (
+                pL[i] * (1-pLu-pLd)
+                + pd[i] * (1-pr[i]) * pdL
+                + pd[i] * pr[i] * puL
+                + pu[i] * puL
+            )
+
+            pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+        mean_qc_all[rate_name][rate] = M * pr * pd
+        ff_all[rate_name][rate] = 1-pr*pd
+
+# Plot
+
+fig,ax = plt.subplots(2,4,figsize=(16,7),sharex=True)
+
+fs=15
+mks=5
+lw=3
+
+rate_names = ['kDL','kLD','kLU','kUL']
+rate_values_all = [kDL_values,kLD_values,kLU_values,kUL_values]
+
+for j,rate_name in enumerate(rate_names):
+
+    for rate in rate_values_all[j]:
+        ax[0,j].plot(
+            range(1,naps+1),
+            mean_qc_all[rate_name][rate],
+            label=f'${rate_name}={rate}$',
+            marker='o', markersize=mks,linewidth=lw
+        )
+
+    ax[0,j].set_title(fr'Varying ${rate_name}$',fontsize=fs)
+    ax[0,j].set_ylabel('Mean QC',fontsize=fs)
+    ax[0,j].tick_params(axis='both',labelsize=fs)
+    ax[0,j].legend(fontsize=12)
+
+    for rate in rate_values_all[j]:
+        ax[1,j].plot(
+            range(1,naps+1),
+            ff_all[rate_name][rate],
+            label=f'${rate_name}={rate}$',
+            marker='o', markersize=mks,linewidth=lw
+        )
+
+    ax[1,j].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+    ax[1,j].set_ylabel('Fano factor',fontsize=fs)
+    ax[1,j].tick_params(axis='both',labelsize=fs)
+    ax[1,j].legend(fontsize=12)
+
+plt.tight_layout()
+plt.show()
+#%% combine all three with pr0 and prinf changing too
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states = [puss,pLss,pdss]
+
+# Continuous-time generator
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+P = get_transition_matrix(T)
+
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+# Constant pr sweep
+pr_values = [0.1,0.13,0.16,0.2]
+
+mean_qc_constant = {}
+ff_constant = {}
+
+for pr_value in pr_values:
+
+    pr = np.full(naps,pr_value)
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_constant[pr_value] = M * pr * pd
+    ff_constant[pr_value] = 1-pr*pd
+
+# Hill pr sweep: varying prinf, fixed pr0
+thr = 4
+H = 2
+
+pr0 = 0.1
+prinf_values = [0.1,0.2,0.3,0.4]
+
+mean_qc_hill_prinf = {}
+ff_hill_prinf = {}
+
+for prinf in prinf_values:
+
+    i_hill = np.arange(naps)
+
+    pr = prinf + (pr0-prinf) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_hill_prinf[prinf] = M * pr * pd
+    ff_hill_prinf[prinf] = 1-pr*pd
+
+# Hill pr sweep: varying pr0, fixed prinf
+prinf = 0.4
+pr0_values = [0.1,0.2,0.3,0.4]
+
+mean_qc_hill_pr0 = {}
+ff_hill_pr0 = {}
+
+for pr0 in pr0_values:
+
+    i_hill = np.arange(naps)
+
+    pr = prinf + (pr0-prinf) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        pd[i+1] = (
+            pd[i] * (1-pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_hill_pr0[pr0] = M * pr * pd
+    ff_hill_pr0[pr0] = 1-pr*pd
+
+# Plot
+fig,ax = plt.subplots(3,2,figsize=(9,10),sharex=True)
+
+# Row 1: constant pr
+for pr_value in pr_values:
+    ax[0,0].plot(
+        range(1,naps+1),
+        mean_qc_constant[pr_value],
+        label=f'$p_r={pr_value}$'
+    )
+
+ax[0,0].set_ylabel('Mean QC')
+ax[0,0].set_title('Constant $p_r$')
+ax[0,0].legend()
+
+for pr_value in pr_values:
+    ax[0,1].plot(
+        range(1,naps+1),
+        ff_constant[pr_value],
+        label=f'$p_r={pr_value}$'
+    )
+
+ax[0,1].set_ylabel('Fano factor')
+ax[0,1].set_title('Constant $p_r$')
+ax[0,1].legend()
+
+# Row 2: varying prinf, fixed pr0
+for prinf in prinf_values:
+    ax[1,0].plot(
+        range(1,naps+1),
+        mean_qc_hill_prinf[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$'
+    )
+
+ax[1,0].set_ylabel('Mean QC')
+ax[1,0].set_title(r'Hill $p_r$: varying $p_{r,\infty}$')
+ax[1,0].legend()
+
+for prinf in prinf_values:
+    ax[1,1].plot(
+        range(1,naps+1),
+        ff_hill_prinf[prinf],
+        label=f'$p_{{r,\\infty}}={prinf}$'
+    )
+
+ax[1,1].set_ylabel('Fano factor')
+ax[1,1].set_title(r'Hill $p_r$: varying $p_{r,\infty}$')
+ax[1,1].legend()
+
+# Row 3: varying pr0, fixed prinf
+for pr0 in pr0_values:
+    ax[2,0].plot(
+        range(1,naps+1),
+        mean_qc_hill_pr0[pr0],
+        label=f'$p_{{r,0}}={pr0}$'
+    )
+
+ax[2,0].set_xlabel('AP stimulus number, $i$')
+ax[2,0].set_ylabel('Mean QC')
+ax[2,0].set_title(r'Hill $p_r$: varying $p_{r,0}$')
+ax[2,0].legend()
+
+for pr0 in pr0_values:
+    ax[2,1].plot(
+        range(1,naps+1),
+        ff_hill_pr0[pr0],
+        label=f'$p_{{r,0}}={pr0}$'
+    )
+
+ax[2,1].set_xlabel('AP stimulus number, $i$')
+ax[2,1].set_ylabel('Fano factor')
+ax[2,1].set_title(r'Hill $p_r$: varying $p_{r,0}$')
+ax[2,1].legend()
+
+plt.tight_layout()
+plt.show()
+
+#%% Both combined - Hill kinetic rates - mean + ff
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 20
+kLD = 20
+kLU = 20
+kUL = 20
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+pr = 0.2
+
+thr = 4
+H = 2
+
+# Manually specified minimum and maximum values
+rate_limits = {
+    'kDL': {'min': 0.1, 'max': 100},
+    'kLD': {'min': 0.1, 'max': 100},
+    'kLU': {'min': 0.1, 'max': 100},
+    'kUL': {'min': 0.1, 'max': 100}
+}
+
+rate_names = ['kDL','kLD','kLU','kUL']
+
+base_rates = {
+    'kDL': kDL,
+    'kLD': kLD,
+    'kLU': kLU,
+    'kUL': kUL
+}
+
+# Calculation
+
+mean_qc_all = {}
+ff_all = {}
+
+for rate_name in rate_names:
+
+    mean_qc_all[rate_name] = {}
+    ff_all[rate_name] = {}
+
+    k0 = base_rates[rate_name]
+
+    kmin = rate_limits[rate_name]['min']
+    kmax = rate_limits[rate_name]['max']
+
+    i_hill = np.arange(naps)
+
+    # Increasing: k0 approaches kmax
+    k_values = kmax + (k0-kmax) / (
+        1+(i_hill/thr)**H
+    )
+
+    # Baseline steady state at i=0
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        kDL_i = kDL
+        kLD_i = kLD
+        kLU_i = kLU
+        kUL_i = kUL
+
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL_i
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD_i
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU_i
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL_i
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[i+1] = (
+            pd[i] * (1-pr) * pdd
+            + pd[i] * pr * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr) * pdL
+            + pd[i] * pr * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_all[rate_name]['increasing'] = M * pr * pd
+    ff_all[rate_name]['increasing'] = 1-pr*pd
+
+    # Decreasing: k0 approaches kmin
+    k_values = kmin + (k0-kmin) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for i in range(naps-1):
+
+        kDL_i = kDL
+        kLD_i = kLD
+        kLU_i = kLU
+        kUL_i = kUL
+
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL_i
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD_i
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU_i
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL_i
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[i+1] = (
+            pd[i] * (1-pr) * pdd
+            + pd[i] * pr * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr) * pdL
+            + pd[i] * pr * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_all[rate_name]['decreasing'] = M * pr * pd
+    ff_all[rate_name]['decreasing'] = 1-pr*pd
+
+# Plot
+
+fig,ax = plt.subplots(2,4,figsize=(16,7),sharex=True)
+
+fs=15
+lw=3
+
+for j,rate_name in enumerate(rate_names):
+    
+    ax[0,j].plot(
+        range(1,naps+1),
+        mean_qc_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[0,j].plot(
+        range(1,naps+1),
+        mean_qc_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[0,j].set_title(fr'${rate_name}(i)$',fontsize=fs)
+    ax[0,j].set_ylabel('Mean QC',fontsize=fs)
+    ax[0,j].tick_params(axis='both',labelsize=fs)
+    ax[0,j].legend(fontsize=12)
+
+    ax[1,j].plot(
+        range(1,naps+1),
+        ff_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[1,j].plot(
+        range(1,naps+1),
+        ff_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[1,j].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+    ax[1,j].set_ylabel('Fano factor',fontsize=fs)
+    ax[1,j].tick_params(axis='both',labelsize=fs)
+    ax[1,j].legend(fontsize=12)
+
+plt.tight_layout()
+plt.show()
+
+# =============================================================================
+# # Plot everything together in a 2x1
+# 
+# fig,ax = plt.subplots(2,1,figsize=(10,8),sharex=True)
+# 
+# fs=15
+# lw=3
+# 
+# colors = {
+#     'kDL': 'tab:blue',
+#     'kLD': 'tab:orange',
+#     'kLU': 'tab:green',
+#     'kUL': 'tab:red'
+# }
+# 
+# for rate_name in rate_names:
+# 
+#     ax[0].plot(
+#         range(1,naps+1),
+#         mean_qc_all[rate_name]['increasing'],
+#         label=fr'$k_{{{rate_name[1:]}}}(i)$ Increasing',
+#         color=colors[rate_name],
+#         marker='o',markersize=5,linewidth=lw
+#     )
+# 
+#     ax[0].plot(
+#         range(1,naps+1),
+#         mean_qc_all[rate_name]['decreasing'],
+#         label=fr'$k_{{{rate_name[1:]}}}(i)$ Decreasing',
+#         color=colors[rate_name],
+#         marker='s',markersize=5,linewidth=lw,
+#         linestyle='--'
+#     )
+# 
+#     ax[1].plot(
+#         range(1,naps+1),
+#         ff_all[rate_name]['increasing'],
+#         label=fr'$k_{{{rate_name[1:]}}}(i)$ Increasing',
+#         color=colors[rate_name],
+#         marker='o',markersize=5,linewidth=lw
+#     )
+# 
+#     ax[1].plot(
+#         range(1,naps+1),
+#         ff_all[rate_name]['decreasing'],
+#         label=fr'$k_{{{rate_name[1:]}}}(i)$ Decreasing',
+#         color=colors[rate_name],
+#         marker='s',markersize=5,linewidth=lw,
+#         linestyle='--'
+#     )
+# 
+# ax[0].set_ylabel('Mean QC',fontsize=fs)
+# ax[0].tick_params(axis='both',labelsize=fs)
+# 
+# handles,labels = ax[0].get_legend_handles_labels()
+# 
+# ax[0].legend(
+#     handles,labels,
+#     fontsize=12,
+#     ncol=4,
+#     loc='lower center',
+#     bbox_to_anchor=(0.5,1.05)
+# )
+# 
+# ax[1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+# ax[1].set_ylabel('Fano factor',fontsize=fs)
+# ax[1].tick_params(axis='both',labelsize=fs)
+# 
+# plt.subplots_adjust(top=0.85)
+# plt.show()
+# =============================================================================
+
+ #%% Both combined - Hill kinetic rates: mean + ff + pXY + k plots
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 20
+kLD = 20
+kLU = 20
+kUL = 20
+
+M = 100
+f = 10
+T = 1 / f
+naps = 20
+
+pr = 0.2
+
+thr = 4
+H = 2
+
+# Manually specified minimum and maximum values
+rate_limits = {
+    'kDL': {'min': 0.1, 'max': 100},
+    'kLD': {'min': 0.1, 'max': 100},
+    'kLU': {'min': 0.1, 'max': 100},
+    'kUL': {'min': 0.1, 'max': 100}
+}
+
+rate_names = ['kDL','kLD','kLU','kUL']
+
+base_rates = {
+    'kDL': kDL,
+    'kLD': kLD,
+    'kLU': kLU,
+    'kUL': kUL
+}
+
+# Calculation
+
+mean_qc_all = {}
+ff_all = {}
+transition_all = {}
+k_all = {}
+
+for rate_name in rate_names:
+
+    mean_qc_all[rate_name] = {}
+    ff_all[rate_name] = {}
+    transition_all[rate_name] = {}
+    k_all[rate_name] = {}
+
+    k0 = base_rates[rate_name]
+
+    kmin = rate_limits[rate_name]['min']
+    kmax = rate_limits[rate_name]['max']
+
+    i_hill = np.arange(naps)
+
+    # Increasing: k0 approaches kmax
+    k_values = kmax + (k0-kmax) / (
+        1+(i_hill/thr)**H
+    )
+
+    # Baseline steady state at i=0
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    transition_values = []
+
+    for i in range(naps-1):
+
+        kDL_i = kDL
+        kLD_i = kLD
+        kLU_i = kLU
+        kUL_i = kUL
+
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL_i
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD_i
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU_i
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL_i
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        if rate_name == 'kDL':
+            transition_values.append(pdL)
+        elif rate_name == 'kLD':
+            transition_values.append(pLd)
+        elif rate_name == 'kLU':
+            transition_values.append(pLu)
+        elif rate_name == 'kUL':
+            transition_values.append(puL)
+
+        pd[i+1] = (
+            pd[i] * (1-pr) * pdd
+            + pd[i] * pr * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr) * pdL
+            + pd[i] * pr * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_all[rate_name]['increasing'] = M * pr * pd
+    ff_all[rate_name]['increasing'] = 1-pr*pd
+    transition_all[rate_name]['increasing'] = transition_values
+    k_all[rate_name]['increasing'] = k_values
+
+    # Decreasing: k0 approaches kmin
+    k_values = kmin + (k0-kmin) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+    pu = np.zeros(naps)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    transition_values = []
+
+    for i in range(naps-1):
+
+        kDL_i = kDL
+        kLD_i = kLD
+        kLU_i = kLU
+        kUL_i = kUL
+
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL_i
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD_i
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU_i
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL_i
+
+        # Continuous-time generator
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        if rate_name == 'kDL':
+            transition_values.append(pdL)
+        elif rate_name == 'kLD':
+            transition_values.append(pLd)
+        elif rate_name == 'kLU':
+            transition_values.append(pLu)
+        elif rate_name == 'kUL':
+            transition_values.append(puL)
+
+        pd[i+1] = (
+            pd[i] * (1-pr) * pdd
+            + pd[i] * pr * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1-pLu-pLd)
+            + pd[i] * (1-pr) * pdL
+            + pd[i] * pr * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1-pL[i+1]-pd[i+1]
+
+    mean_qc_all[rate_name]['decreasing'] = M * pr * pd
+    ff_all[rate_name]['decreasing'] = 1-pr*pd
+    transition_all[rate_name]['decreasing'] = transition_values
+    k_all[rate_name]['decreasing'] = k_values
+
+# Plot
+
+fig,ax = plt.subplots(4,4,figsize=(16,13),sharex='row')
+
+fs=15
+lw=3
+
+transition_names = {
+    'kDL': r'$p_{DL,i}$',
+    'kLD': r'$p_{LD,i}$',
+    'kLU': r'$p_{LU,i}$',
+    'kUL': r'$p_{UL,i}$'
+}
+
+for j,rate_name in enumerate(rate_names):
+
+    # Mean QC
+
+    ax[0,j].plot(
+        range(1,naps+1),
+        mean_qc_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[0,j].plot(
+        range(1,naps+1),
+        mean_qc_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[0,j].set_title(fr'${rate_name}(i)$',fontsize=fs)
+    ax[0,j].set_ylabel('Mean QC',fontsize=fs)
+    ax[0,j].tick_params(axis='both',labelsize=fs)
+    ax[0,j].legend(fontsize=12)
+
+    # Fano factor
+
+    ax[1,j].plot(
+        range(1,naps+1),
+        ff_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[1,j].plot(
+        range(1,naps+1),
+        ff_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[1,j].set_ylabel('Fano factor',fontsize=fs)
+    ax[1,j].tick_params(axis='both',labelsize=fs)
+    ax[1,j].legend(fontsize=12)
+
+    # Associated transition probability
+
+    ax[2,j].plot(
+        range(1,naps),
+        transition_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[2,j].plot(
+        range(1,naps),
+        transition_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[2,j].set_ylabel(transition_names[rate_name],fontsize=fs)
+    ax[2,j].tick_params(axis='both',labelsize=fs)
+    ax[2,j].legend(fontsize=12)
+
+    # Kinetic rate
+
+    ax[3,j].plot(
+        range(1,naps+1),
+        k_all[rate_name]['increasing'],
+        label='Increasing',
+        color='tab:orange',
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax[3,j].plot(
+        range(1,naps+1),
+        k_all[rate_name]['decreasing'],
+        label='Decreasing',
+        color='tab:blue',
+        marker='s',markersize=5,linewidth=lw
+    )
+
+    ax[3,j].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+    ax[3,j].set_ylabel(fr'${rate_name}(i)$',fontsize=fs)
+    ax[3,j].tick_params(axis='both',labelsize=fs)
+    ax[3,j].legend(fontsize=12)
+
+plt.tight_layout()
+plt.show()
+#%%  E[b_i b_(i+j)] matrix exponential
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+pr0 = 0.4
+prinf = 0.4
+thr = 10
 H = 2
 
 i = 1
 j_max = 100
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+
+# =============================================================================
+# #               U,L,D
+# initial_states=[0,0,1]
+# =============================================================================
 
 # Maximum AP index that will be needed
 max_ap = i + j_max
@@ -527,7 +3335,7 @@ pL = np.zeros(max_ap + 1)
 pd = np.zeros(max_ap + 1)
 pu = np.zeros(max_ap + 1)
 
-pu[0] = 1
+pu[0],pL[0],pd[0]=initial_states
 
 for n in range(max_ap):
 
@@ -621,19 +3429,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
-kDL = 10
-kLD = 60
-kLU = 10
-kUL = 10 
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
 
 M = 100
-f = 10
+f = 100
 T = 1 / f
 
-pr0 = 0.1
-prinf = 0.1
+pr0 = 0.4
+prinf = 0.4
 thr = 10
 H = 2
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+
+# =============================================================================
+# #               U,L,D
+# initial_states=[0,0,1]
+# =============================================================================
 
 i = 1
 j_max = 9
@@ -671,7 +3491,11 @@ pL = np.zeros(max_ap+1)
 pd = np.zeros(max_ap+1)
 pu = np.zeros(max_ap+1)
 
-pu[0] = 1
+pu[0]=0
+pL[0]=0
+pd[0]=1
+
+pu[0],pL[0],pd[0]=initial_states
 
 for n in range(max_ap):
 
@@ -751,6 +3575,1781 @@ plt.show()
 for j,value in zip(j_values,rho):
     print(f'j = {j:3d}, rho = {value:.8f}')
     
+#%% Pearson correlation coefficient - pr sweep
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+
+# =============================================================================
+# #               U,L,D
+# initial_states=[0,0,1]
+# =============================================================================
+
+
+i = 1
+j_max = 6
+
+pr_values = [0.1, 0.2, 0.5, 1]
+
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+# Transition probabilities over one inter-AP interval
+P = get_transition_matrix(T)
+
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+max_ap = i + j_max
+
+# Calculation
+
+rho_all = {}
+
+for prinf in pr_values:
+
+    pr0 = prinf
+
+    pr = pr0 + (prinf-pr0)/(1+(np.arange(max_ap+1)/thr)**H)
+
+    pL = np.zeros(max_ap+1)
+    pd = np.zeros(max_ap+1)
+    pu = np.zeros(max_ap+1)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for n in range(max_ap):
+
+        pd[n+1] = (
+            pd[n]*(1-pr[n])*(1-pdu-pdL)
+            + pd[n]*pr[n]*pud
+            + pu[n]*pud
+            + pL[n]*pLd
+        )
+
+        pL[n+1] = (
+            pL[n]*(1-pLu-pLd)
+            + pd[n]*(1-pr[n])*pdL
+            + pd[n]*pr[n]*puL
+            + pu[n]*puL
+        )
+
+        pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+    p_ri = pd[i]*pr[i]
+
+    j_values = np.arange(1,j_max+1)
+    rho = np.zeros(j_max)
+
+    for n,j in enumerate(j_values):
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        for k in range(i+1,i+j):
+
+            pT_new = (
+                pT*(1-pr[k])*pdd
+                + pT*pr[k]*pud
+                + pL_joint*pLd
+                + pU*pud
+            )
+
+            pL_new = (
+                pT*(1-pr[k])*pdL
+                + pT*pr[k]*puL
+                + pL_joint*pLL
+                + pU*puL
+            )
+
+            pU_new = p_ri-pT_new-pL_new
+
+            pT = pT_new
+            pL_joint = pL_new
+            pU = pU_new
+
+        p_ri_rij = pT*pr[i+j]
+        p_rij = pd[i+j]*pr[i+j]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho[n] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    rho_all[pr0] = rho
+    
+# Plotting
+
+from matplotlib.ticker import MaxNLocator
+
+plt.figure(figsize=(7,5))
+mks=['o','s','D','^']
+for i,pr0 in enumerate(pr_values):
+    plt.plot(
+        range(1,j_max+1),
+        rho_all[pr0],
+        'o-',
+        label=fr'$p_r={pr0}$',
+        markersize=7,
+        marker=mks[i]
+    )
+
+fs=15
+plt.xlabel(r'Lag from the $1$st AP $(i=1)$, $\ell$',fontsize=fs)
+# plt.ylabel(r'Correlation coefficient, $\rho_{i,i+\ell}$',fontsize=fs)
+plt.ylabel('Normalzied autocorrelation\nfunction of the QC, $\\rho(i,i+\\ell)$',fontsize=fs)
+plt.legend(fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+
+plt.tight_layout()
+plt.grid(True,alpha=0.3)
+plt.show()
+
+#%% Pearson correlation coefficient - pr sweep to find which one maxes rho(1,2)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+# steady state
+denom = kDL*kLU + kDL*kUL + kLD*kUL
+puss = (kDL*kLU) / denom
+pLss = (kDL*kUL) / denom
+pdss = (kLD*kUL) / denom
+initial_states=[puss,pLss,pdss]
+
+i = 1
+
+pr_values = np.linspace(0.01,1,100)
+
+def get_transition_matrix(T):
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+    return expm(Q*T)
+
+# Transition probabilities over one inter-AP interval
+P = get_transition_matrix(T)
+
+puu = P[0,0]
+puL = P[0,1]
+pud = P[0,2]
+
+pLu = P[1,0]
+pLL = P[1,1]
+pLd = P[1,2]
+
+pdu = P[2,0]
+pdL = P[2,1]
+pdd = P[2,2]
+
+# Calculation
+
+rho_values = np.zeros(len(pr_values))
+
+for m,pr0 in enumerate(pr_values):
+
+    prinf = pr0
+
+    pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
+
+    pL = np.zeros(3)
+    pd = np.zeros(3)
+    pu = np.zeros(3)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for n in range(2):
+
+        pd[n+1] = (
+            pd[n]*(1-pr[n])*(1-pdu-pdL)
+            + pd[n]*pr[n]*pud
+            + pu[n]*pud
+            + pL[n]*pLd
+        )
+
+        pL[n+1] = (
+            pL[n]*(1-pLu-pLd)
+            + pd[n]*(1-pr[n])*pdL
+            + pd[n]*pr[n]*puL
+            + pu[n]*puL
+        )
+
+        pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+    # rho(1,2), so j = 1
+    p_ri = pd[i]*pr[i]
+
+    pT = p_ri*pud
+    pL_joint = p_ri*puL
+    pU = p_ri*puu
+
+    p_ri_rij = pT*pr[i+1]
+    p_rij = pd[i+1]*pr[i+1]
+
+    E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+    E_bi = M*p_ri
+    E_bij = M*p_rij
+
+    var_bi = M*p_ri*(1-p_ri)
+    var_bij = M*p_rij*(1-p_rij)
+
+    cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+    rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+# Maximum rho(1,2)
+max_index = np.argmax(rho_values)
+max_pr = pr_values[max_index]
+max_rho = rho_values[max_index]
+
+print(f'Maximum rho(1,2) = {max_rho:.6f}')
+print(f'At pr = {max_pr:.6f}')
+
+# Plot
+fs=15
+plt.figure(figsize=(7,5))
+plt.plot(pr_values,rho_values,lw=5)
+
+plt.xlabel(r'$p_r$',fontsize=fs)
+plt.ylabel(r'Correlation coefficient, $\rho_{1,2}$',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
+plt.tight_layout()
+plt.grid(True,alpha=0.3)
+plt.show()
+
+#%% Optimal pr and minimum correlation as functions of each k rate
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+i = 1
+
+pr_values = np.linspace(0.01,1,100)
+
+
+def calculate_rho(kDL,kLD,kLU,kUL):
+
+    # steady state
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    # transition matrix
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+
+    P = expm(Q*T)
+
+    puu = P[0,0]
+    puL = P[0,1]
+    pud = P[0,2]
+
+    pLu = P[1,0]
+    pLL = P[1,1]
+    pLd = P[1,2]
+
+    pdu = P[2,0]
+    pdL = P[2,1]
+    pdd = P[2,2]
+
+    rho_values = np.zeros(len(pr_values))
+
+    for m,pr0 in enumerate(pr_values):
+
+        prinf = pr0
+
+        pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
+
+        pL = np.zeros(3)
+        pd = np.zeros(3)
+        pu = np.zeros(3)
+
+        pu[0],pL[0],pd[0] = initial_states
+
+        for n in range(2):
+
+            pd[n+1] = (
+                pd[n]*(1-pr[n])*(1-pdu-pdL)
+                + pd[n]*pr[n]*pud
+                + pu[n]*pud
+                + pL[n]*pLd
+            )
+
+            pL[n+1] = (
+                pL[n]*(1-pLu-pLd)
+                + pd[n]*(1-pr[n])*pdL
+                + pd[n]*pr[n]*puL
+                + pu[n]*puL
+            )
+
+            pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+        # rho(1,2), so j = 1
+        p_ri = pd[i]*pr[i]
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        p_ri_rij = pT*pr[i+1]
+        p_rij = pd[i+1]*pr[i+1]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    # Minimum rho
+    min_index = np.argmin(rho_values)
+
+    return pr_values[min_index],rho_values[min_index]
+
+
+# Rate values to sweep
+rate_values = np.linspace(1,100,100)
+
+rates = {
+    r'$k_{DL}$': 'kDL',
+    r'$k_{LD}$': 'kLD',
+    r'$k_{LU}$': 'kLU',
+    r'$k_{UL}$': 'kUL'
+}
+
+pr_star = {}
+rho_min = {}
+
+for rate_name,rate_variable in rates.items():
+
+    pr_star[rate_variable] = np.zeros(len(rate_values))
+    rho_min[rate_variable] = np.zeros(len(rate_values))
+
+    for j,rate in enumerate(rate_values):
+
+        values = {
+            'kDL': kDL,
+            'kLD': kLD,
+            'kLU': kLU,
+            'kUL': kUL
+        }
+
+        values[rate_variable] = rate
+
+        pr_star[rate_variable][j],rho_min[rate_variable][j] = calculate_rho(
+            values['kDL'],
+            values['kLD'],
+            values['kLU'],
+            values['kUL']
+        )
+
+
+# Plot
+fs = 15
+
+fig,axs = plt.subplots(2,4,figsize=(20,9))
+
+for j,(rate_name,rate_variable) in enumerate(rates.items()):
+
+    # p_r* plot
+    axs[0,j].plot(
+        rate_values,
+        pr_star[rate_variable],
+        lw=5
+    )
+
+    axs[0,j].set_xlabel(
+        rate_name + r' (s$^{-1}$)',
+        fontsize=fs
+    )
+
+    axs[0,j].set_ylabel(
+        r'$p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_title(
+        r'Optimal $p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[0,j].grid(True,alpha=0.3)
+
+
+    # minimum rho plot
+    axs[1,j].plot(
+        rate_values,
+        rho_min[rate_variable],
+        lw=5
+    )
+
+    axs[1,j].set_xlabel(
+        rate_name + r' (s$^{-1}$)',
+        fontsize=fs
+    )
+
+    axs[1,j].set_ylabel(
+        r'$\rho_{\min}(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_title(
+        r'Minimum $\rho(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[1,j].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+#%% Optimal pr and minimum correlation as functions of each k rate
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+i = 1
+
+pr_values = np.linspace(0.01,1,100)
+
+
+def calculate_rho(kDL,kLD,kLU,kUL):
+
+    # steady state
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    # transition matrix
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+
+    P = expm(Q*T)
+
+    puu = P[0,0]
+    puL = P[0,1]
+    pud = P[0,2]
+
+    pLu = P[1,0]
+    pLL = P[1,1]
+    pLd = P[1,2]
+
+    pdu = P[2,0]
+    pdL = P[2,1]
+    pdd = P[2,2]
+
+    rho_values = np.zeros(len(pr_values))
+
+    for m,pr0 in enumerate(pr_values):
+
+        prinf = pr0
+
+        pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
+
+        pL = np.zeros(3)
+        pd = np.zeros(3)
+        pu = np.zeros(3)
+
+        pu[0],pL[0],pd[0] = initial_states
+
+        for n in range(2):
+
+            pd[n+1] = (
+                pd[n]*(1-pr[n])*(1-pdu-pdL)
+                + pd[n]*pr[n]*pud
+                + pu[n]*pud
+                + pL[n]*pLd
+            )
+
+            pL[n+1] = (
+                pL[n]*(1-pLu-pLd)
+                + pd[n]*(1-pr[n])*pdL
+                + pd[n]*pr[n]*puL
+                + pu[n]*puL
+            )
+
+            pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+        # rho(1,2), so j = 1
+        p_ri = pd[i]*pr[i]
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        p_ri_rij = pT*pr[i+1]
+        p_rij = pd[i+1]*pr[i+1]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    # Minimum rho
+    min_index = np.argmin(rho_values)
+
+    return pr_values[min_index],rho_values[min_index]
+
+
+# Rate values to sweep
+rate_values = np.linspace(1,100,100)
+
+rates = {
+    r'$k_{DL}$': 'kDL',
+    r'$k_{LD}$': 'kLD',
+    r'$k_{LU}$': 'kLU',
+    r'$k_{UL}$': 'kUL'
+}
+
+pr_star = {}
+rho_min = {}
+
+for rate_name,rate_variable in rates.items():
+
+    pr_star[rate_variable] = np.zeros(len(rate_values))
+    rho_min[rate_variable] = np.zeros(len(rate_values))
+
+    for j,rate in enumerate(rate_values):
+
+        values = {
+            'kDL': kDL,
+            'kLD': kLD,
+            'kLU': kLU,
+            'kUL': kUL
+        }
+
+        values[rate_variable] = rate
+
+        pr_star[rate_variable][j],rho_min[rate_variable][j] = calculate_rho(
+            values['kDL'],
+            values['kLD'],
+            values['kLU'],
+            values['kUL']
+        )
+
+
+# Plot
+fs = 15
+
+fig,axs = plt.subplots(2,4,figsize=(20,9))
+
+for j,(rate_name,rate_variable) in enumerate(rates.items()):
+
+    # p_r* plot
+    axs[0,j].plot(
+        rate_values/f,
+        pr_star[rate_variable],
+        lw=5
+    )
+
+    axs[0,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_ylabel(
+        r'$p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_title(
+        r'Optimal $p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[0,j].grid(True,alpha=0.3)
+
+
+    # minimum rho plot
+    axs[1,j].plot(
+        rate_values/f,
+        rho_min[rate_variable],
+        lw=5
+    )
+
+    axs[1,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_ylabel(
+        r'$\rho_{\min}(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_title(
+        r'Minimum $\rho(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[1,j].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+#%% Optimal pr and minimum correlation as functions of each k rate
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+i = 1
+
+pr_values = np.linspace(0.01,1,1500)
+
+
+def calculate_rho(kDL,kLD,kLU,kUL):
+
+    # steady state
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    # transition matrix
+    Q = np.array([
+        [-kUL,          kUL,          0],
+        [ kLU, -(kLU + kLD),         kLD],
+        [   0,           kDL,       -kDL]
+    ])
+
+    P = expm(Q*T)
+
+    puu = P[0,0]
+    puL = P[0,1]
+    pud = P[0,2]
+
+    pLu = P[1,0]
+    pLL = P[1,1]
+    pLd = P[1,2]
+
+    pdu = P[2,0]
+    pdL = P[2,1]
+    pdd = P[2,2]
+
+    rho_values = np.zeros(len(pr_values))
+
+    for m,pr0 in enumerate(pr_values):
+
+        prinf = pr0
+
+        pr = pr0 + (prinf-pr0)/(1+(np.arange(3)/thr)**H)
+
+        pL = np.zeros(3)
+        pd = np.zeros(3)
+        pu = np.zeros(3)
+
+        pu[0],pL[0],pd[0] = initial_states
+
+        for n in range(2):
+
+            pd[n+1] = (
+                pd[n]*(1-pr[n])*(1-pdu-pdL)
+                + pd[n]*pr[n]*pud
+                + pu[n]*pud
+                + pL[n]*pLd
+            )
+
+            pL[n+1] = (
+                pL[n]*(1-pLu-pLd)
+                + pd[n]*(1-pr[n])*pdL
+                + pd[n]*pr[n]*puL
+                + pu[n]*puL
+            )
+
+            pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+        # rho(1,2), so j = 1
+        p_ri = pd[i]*pr[i]
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        p_ri_rij = pT*pr[i+1]
+        p_rij = pd[i+1]*pr[i+1]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho_values[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    # Minimum rho
+    min_index = np.argmin(rho_values)
+
+    return pr_values[min_index],rho_values[min_index]
+
+
+# Rate values to sweep
+rate_values = np.linspace(1,400,500)
+
+rates = {
+    r'$k_{DL}$': 'kDL',
+    r'$k_{LD}$': 'kLD',
+    r'$k_{LU}$': 'kLU',
+    r'$k_{UL}$': 'kUL'
+}
+
+pr_star = {}
+rho_min = {}
+
+for rate_name,rate_variable in rates.items():
+
+    pr_star[rate_variable] = np.zeros(len(rate_values))
+    rho_min[rate_variable] = np.zeros(len(rate_values))
+
+    for j,rate in enumerate(rate_values):
+
+        values = {
+            'kDL': kDL,
+            'kLD': kLD,
+            'kLU': kLU,
+            'kUL': kUL
+        }
+
+        values[rate_variable] = rate
+
+        pr_star[rate_variable][j],rho_min[rate_variable][j] = calculate_rho(
+            values['kDL'],
+            values['kLD'],
+            values['kLU'],
+            values['kUL']
+        )
+#%% plotting optimal pr and rho(1,2)
+
+# Plot
+fs = 15
+
+fig,axs = plt.subplots(2,4,figsize=(20,9))
+
+for j,(rate_name,rate_variable) in enumerate(rates.items()):
+
+    x = rate_values/f
+    y = rho_min[rate_variable]
+
+    # Find all k/f values where rho_min = -0.2
+    target = -0.2
+
+    crossing_indices = np.where(
+        (y[:-1]-target)*(y[1:]-target) <= 0
+    )[0]
+
+    kf_crossings = []
+
+    for n in crossing_indices:
+
+        if y[n+1] == y[n]:
+            kf_cross = x[n]
+        else:
+            kf_cross = x[n] + (target-y[n])*(x[n+1]-x[n])/(y[n+1]-y[n])
+
+        kf_crossings.append(kf_cross)
+
+    print(rate_name + r': $k/f$ =', kf_crossings)
+
+
+    # p_r* plot
+    axs[0,j].plot(
+        x,
+        pr_star[rate_variable],
+        lw=5
+    )
+
+    for kf_cross in kf_crossings:
+        axs[0,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[0,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_ylabel(
+        r'$p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_title(
+        r'Optimal $p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[0,j].grid(True,alpha=0.3)
+
+
+    # minimum rho plot
+    axs[1,j].plot(
+        x,
+        y,
+        lw=5
+    )
+
+    axs[1,j].axhline(
+        -0.2,
+        lw=2,
+        linestyle='--',
+        color='k'
+    )
+
+    for kf_cross in kf_crossings:
+        axs[1,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[1,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_ylabel(
+        r'$\rho_{\min}(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_title(
+        r'Minimum $\rho(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[1,j].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+#%% plotting optimal pr and rho(1,2)
+
+# Plot
+fs = 15
+
+fig,axs = plt.subplots(2,4,figsize=(20,9))
+
+for j,(rate_name,rate_variable) in enumerate(rates.items()):
+
+    x = rate_values/f
+    y = rho_min[rate_variable]
+
+    # Find all k/f values where rho_min = -0.2
+    target = -0.2
+
+    crossing_indices = np.where(
+        (y[:-1]-target)*(y[1:]-target) <= 0
+    )[0]
+
+    kf_crossings = []
+
+    for n in crossing_indices:
+
+        if y[n+1] == y[n]:
+            kf_cross = x[n]
+        else:
+            kf_cross = x[n] + (target-y[n])*(x[n+1]-x[n])/(y[n+1]-y[n])
+
+        kf_crossings.append(kf_cross)
+
+    print(rate_name + r': $k/f$ =', kf_crossings)
+
+
+    # Find regions where rho_min <= -0.2
+    boundaries = [x[0]] + kf_crossings + [x[-1]]
+
+    shaded_regions = []
+
+    for n in range(len(boundaries)-1):
+
+        x_left = boundaries[n]
+        x_right = boundaries[n+1]
+        x_mid = (x_left+x_right)/2
+
+        y_mid = np.interp(x_mid,x,y)
+
+        if y_mid <= target:
+            shaded_regions.append((x_left,x_right))
+
+
+    # p_r* plot
+    axs[0,j].plot(
+        x,
+        pr_star[rate_variable],
+        lw=5
+    )
+
+    for x_left,x_right in shaded_regions:
+        axs[0,j].axvspan(
+            x_left,
+            x_right,
+            color='pink',
+            alpha=0.3
+        )
+
+    for kf_cross in kf_crossings:
+        axs[0,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[0,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_ylabel(
+        r'$p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].set_title(
+        r'Optimal $p_r^*$',
+        fontsize=fs
+    )
+
+    axs[0,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[0,j].grid(True,alpha=0.3)
+
+
+    # minimum rho plot
+    axs[1,j].plot(
+        x,
+        y,
+        lw=5
+    )
+
+    for x_left,x_right in shaded_regions:
+        axs[1,j].axvspan(
+            x_left,
+            x_right,
+            color='pink',
+            alpha=0.3
+        )
+
+    axs[1,j].axhline(
+        target,
+        lw=2,
+        linestyle='--',
+        color='k'
+    )
+
+    for kf_cross in kf_crossings:
+        axs[1,j].axvline(
+            kf_cross,
+            lw=2,
+            linestyle='--',
+            color='k'
+        )
+
+    axs[1,j].set_xlabel(
+        rate_name + r' / $f$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_ylabel(
+        r'$\rho_{\min}(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].set_title(
+        r'Minimum $\rho(1,2)$',
+        fontsize=fs
+    )
+
+    axs[1,j].tick_params(
+        axis='both',
+        labelsize=fs
+    )
+
+    axs[1,j].grid(True,alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+#%% Pearson correlation coefficient - kinetic rate sweeps
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+from matplotlib.ticker import MaxNLocator
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+thr = 10
+H = 2
+
+pr = 0.4
+
+i = 1
+j_max = 8
+
+kDL_values = [1, 25, 50, 100]
+kLD_values = [1, 25, 50, 100]
+kLU_values = [1, 25, 50, 100]
+kUL_values = [1, 25, 50, 100]
+
+max_ap = i + j_max
+
+# Calculation
+
+rho_all = {}
+
+for rate_name, rate_values in [
+    ('kDL', kDL_values),
+    ('kLD', kLD_values),
+    ('kLU', kLU_values),
+    ('kUL', kUL_values)
+]:
+
+    rho_all[rate_name] = {}
+
+    for rate in rate_values:
+
+        kDL_current = kDL
+        kLD_current = kLD
+        kLU_current = kLU
+        kUL_current = kUL
+
+        if rate_name == 'kDL':
+            kDL_current = rate
+        elif rate_name == 'kLD':
+            kLD_current = rate
+        elif rate_name == 'kLU':
+            kLU_current = rate
+        elif rate_name == 'kUL':
+            kUL_current = rate
+
+        # steady state
+        denom = kDL_current*kLU_current + kDL_current*kUL_current + kLD_current*kUL_current
+        puss = (kDL_current*kLU_current) / denom
+        pLss = (kDL_current*kUL_current) / denom
+        pdss = (kLD_current*kUL_current) / denom
+        initial_states = [puss, pLss, pdss]
+
+        Q = np.array([
+            [-kUL_current,          kUL_current,          0],
+            [ kLU_current, -(kLU_current + kLD_current),         kLD_current],
+            [   0,           kDL_current,       -kDL_current]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pL = np.zeros(max_ap+1)
+        pd = np.zeros(max_ap+1)
+        pu = np.zeros(max_ap+1)
+
+        pu[0], pL[0], pd[0] = initial_states
+
+        for n in range(max_ap):
+
+            pd[n+1] = (
+                pd[n]*(1-pr)*(1-pdu-pdL)
+                + pd[n]*pr*pud
+                + pu[n]*pud
+                + pL[n]*pLd
+            )
+
+            pL[n+1] = (
+                pL[n]*(1-pLu-pLd)
+                + pd[n]*(1-pr)*pdL
+                + pd[n]*pr*puL
+                + pu[n]*puL
+            )
+
+            pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+        p_ri = pd[i]*pr
+
+        j_values = np.arange(1, j_max+1)
+        rho = np.zeros(j_max)
+
+        for n, j in enumerate(j_values):
+
+            pT = p_ri*pud
+            pL_joint = p_ri*puL
+            pU = p_ri*puu
+
+            for k in range(i+1, i+j):
+
+                pT_new = (
+                    pT*(1-pr)*pdd
+                    + pT*pr*pud
+                    + pL_joint*pLd
+                    + pU*pud
+                )
+
+                pL_new = (
+                    pT*(1-pr)*pdL
+                    + pT*pr*puL
+                    + pL_joint*pLL
+                    + pU*puL
+                )
+
+                pU_new = p_ri-pT_new-pL_new
+
+                pT = pT_new
+                pL_joint = pL_new
+                pU = pU_new
+
+            p_ri_rij = pT*pr
+            p_rij = pd[i+j]*pr
+
+            E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+            E_bi = M*p_ri
+            E_bij = M*p_rij
+
+            var_bi = M*p_ri*(1-p_ri)
+            var_bij = M*p_rij*(1-p_rij)
+
+            cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+            rho[n] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+        rho_all[rate_name][rate] = rho
+
+# Plotting
+
+fs = 15
+mks = ['o', 's', 'D', '^']
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+
+rate_names = ['kDL', 'kLD', 'kLU', 'kUL']
+rate_values_all = [kDL_values, kLD_values, kLU_values, kUL_values]
+
+for ax, rate_name, rate_values in zip(axes.flat, rate_names, rate_values_all):
+
+    for n, rate in enumerate(rate_values):
+        ax.plot(
+            range(1, j_max+1),
+            rho_all[rate_name][rate],
+            'o-',
+            label=fr'${rate_name}={rate}$',
+            markersize=7,
+            marker=mks[n]
+        )
+
+    ax.set_xlabel(r'AP lag, $\ell$', fontsize=fs)
+    ax.set_ylabel(r'Correlation coefficient, $\rho_{i,i+\ell}$', fontsize=fs)
+    ax.tick_params(axis='both', labelsize=fs)
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_title(fr'Varying ${rate_name}$', fontsize=fs)
+    ax.legend(fontsize=12)
+    ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+#%% Pearson correlation coefficient - Hill kinetic rates
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 5
+kLD = 50
+kLU = 5
+kUL = 50
+
+M = 100
+f = 100
+T = 1 / f
+
+pr0 = 0.1
+prinf = 0.1
+thr = 10
+H = 2
+
+i = 1
+j_max = 20
+
+rate_limits = {
+    'kDL': {'min': 0.1, 'max': 100},
+    'kLD': {'min': 0.1, 'max': 100},
+    'kLU': {'min': 0.1, 'max': 100},
+    'kUL': {'min': 0.1, 'max': 100}
+}
+
+rate_names = ['kDL','kLD','kLU','kUL']
+
+base_rates = {
+    'kDL': kDL,
+    'kLD': kLD,
+    'kLU': kLU,
+    'kUL': kUL
+}
+
+# Calculation
+
+rho_all = {}
+
+for rate_name in rate_names:
+
+    rho_all[rate_name] = {}
+
+    k0 = base_rates[rate_name]
+    kmin = rate_limits[rate_name]['min']
+    kmax = rate_limits[rate_name]['max']
+
+    max_ap = i + j_max
+    i_hill = np.arange(max_ap)
+
+    # Steady state at i=0
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+    puss = (kDL*kLU) / denom
+    pLss = (kDL*kUL) / denom
+    pdss = (kLD*kUL) / denom
+    initial_states = [puss,pLss,pdss]
+
+    # ============================================================
+    # Increasing
+    # ============================================================
+
+    k_values = kmax + (k0-kmax) / (
+        1+(i_hill/thr)**H
+    )
+
+    pr = pr0 + (prinf-pr0) / (
+        1+(np.arange(max_ap+1)/thr)**H
+    )
+
+    pL = np.zeros(max_ap+1)
+    pd = np.zeros(max_ap+1)
+    pu = np.zeros(max_ap+1)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for n in range(max_ap):
+
+        kDL_n = k_values[n] if rate_name == 'kDL' else kDL
+        kLD_n = k_values[n] if rate_name == 'kLD' else kLD
+        kLU_n = k_values[n] if rate_name == 'kLU' else kLU
+        kUL_n = k_values[n] if rate_name == 'kUL' else kUL
+
+        Q = np.array([
+            [-kUL_n,          kUL_n,          0],
+            [ kLU_n, -(kLU_n + kLD_n),       kLD_n],
+            [   0,           kDL_n,       -kDL_n]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[n+1] = (
+            pd[n]*(1-pr[n])*pdd
+            + pd[n]*pr[n]*pud
+            + pu[n]*pud
+            + pL[n]*pLd
+        )
+
+        pL[n+1] = (
+            pL[n]*(1-pLu-pLd)
+            + pd[n]*(1-pr[n])*pdL
+            + pd[n]*pr[n]*puL
+            + pu[n]*puL
+        )
+
+        pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+    p_ri = pd[i]*pr[i]
+
+    j_values = np.arange(1,j_max+1)
+    rho = np.zeros(j_max)
+
+    for m,j in enumerate(j_values):
+
+        # Transition from AP i to AP i+1
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL
+
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        for k in range(i+1,i+j):
+
+            kDL_k = k_values[k] if rate_name == 'kDL' else kDL
+            kLD_k = k_values[k] if rate_name == 'kLD' else kLD
+            kLU_k = k_values[k] if rate_name == 'kLU' else kLU
+            kUL_k = k_values[k] if rate_name == 'kUL' else kUL
+
+            Q = np.array([
+                [-kUL_k,          kUL_k,          0],
+                [ kLU_k, -(kLU_k + kLD_k),       kLD_k],
+                [   0,           kDL_k,       -kDL_k]
+            ])
+
+            P = expm(Q*T)
+
+            puu = P[0,0]
+            puL = P[0,1]
+            pud = P[0,2]
+
+            pLu = P[1,0]
+            pLL = P[1,1]
+            pLd = P[1,2]
+
+            pdu = P[2,0]
+            pdL = P[2,1]
+            pdd = P[2,2]
+
+            pT_new = (
+                pT*(1-pr[k])*pdd
+                + pT*pr[k]*pud
+                + pL_joint*pLd
+                + pU*pud
+            )
+
+            pL_new = (
+                pT*(1-pr[k])*pdL
+                + pT*pr[k]*puL
+                + pL_joint*pLL
+                + pU*puL
+            )
+
+            pU_new = p_ri-pT_new-pL_new
+
+            pT = pT_new
+            pL_joint = pL_new
+            pU = pU_new
+
+        p_ri_rij = pT*pr[i+j]
+        p_rij = pd[i+j]*pr[i+j]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    rho_all[rate_name]['increasing'] = rho
+
+    # ============================================================
+    # Decreasing
+    # ============================================================
+
+    k_values = kmin + (k0-kmin) / (
+        1+(i_hill/thr)**H
+    )
+
+    pL = np.zeros(max_ap+1)
+    pd = np.zeros(max_ap+1)
+    pu = np.zeros(max_ap+1)
+
+    pu[0],pL[0],pd[0] = initial_states
+
+    for n in range(max_ap):
+
+        kDL_n = k_values[n] if rate_name == 'kDL' else kDL
+        kLD_n = k_values[n] if rate_name == 'kLD' else kLD
+        kLU_n = k_values[n] if rate_name == 'kLU' else kLU
+        kUL_n = k_values[n] if rate_name == 'kUL' else kUL
+
+        Q = np.array([
+            [-kUL_n,          kUL_n,          0],
+            [ kLU_n, -(kLU_n + kLD_n),       kLD_n],
+            [   0,           kDL_n,       -kDL_n]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[n+1] = (
+            pd[n]*(1-pr[n])*pdd
+            + pd[n]*pr[n]*pud
+            + pu[n]*pud
+            + pL[n]*pLd
+        )
+
+        pL[n+1] = (
+            pL[n]*(1-pLu-pLd)
+            + pd[n]*(1-pr[n])*pdL
+            + pd[n]*pr[n]*puL
+            + pu[n]*puL
+        )
+
+        pu[n+1] = 1-pL[n+1]-pd[n+1]
+
+    p_ri = pd[i]*pr[i]
+
+    j_values = np.arange(1,j_max+1)
+    rho = np.zeros(j_max)
+
+    for m,j in enumerate(j_values):
+
+        # Transition from AP i to AP i+1
+        kDL_i = k_values[i] if rate_name == 'kDL' else kDL
+        kLD_i = k_values[i] if rate_name == 'kLD' else kLD
+        kLU_i = k_values[i] if rate_name == 'kLU' else kLU
+        kUL_i = k_values[i] if rate_name == 'kUL' else kUL
+
+        Q = np.array([
+            [-kUL_i,          kUL_i,          0],
+            [ kLU_i, -(kLU_i + kLD_i),       kLD_i],
+            [   0,           kDL_i,       -kDL_i]
+        ])
+
+        P = expm(Q*T)
+
+        puu = P[0,0]
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLL = P[1,1]
+        pLd = P[1,2]
+
+        pdu = P[2,0]
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pT = p_ri*pud
+        pL_joint = p_ri*puL
+        pU = p_ri*puu
+
+        for k in range(i+1,i+j):
+
+            kDL_k = k_values[k] if rate_name == 'kDL' else kDL
+            kLD_k = k_values[k] if rate_name == 'kLD' else kLD
+            kLU_k = k_values[k] if rate_name == 'kLU' else kLU
+            kUL_k = k_values[k] if rate_name == 'kUL' else kUL
+
+            Q = np.array([
+                [-kUL_k,          kUL_k,          0],
+                [ kLU_k, -(kLU_k + kLD_k),       kLD_k],
+                [   0,           kDL_k,       -kDL_k]
+            ])
+
+            P = expm(Q*T)
+
+            puu = P[0,0]
+            puL = P[0,1]
+            pud = P[0,2]
+
+            pLu = P[1,0]
+            pLL = P[1,1]
+            pLd = P[1,2]
+
+            pdu = P[2,0]
+            pdL = P[2,1]
+            pdd = P[2,2]
+
+            pT_new = (
+                pT*(1-pr[k])*pdd
+                + pT*pr[k]*pud
+                + pL_joint*pLd
+                + pU*pud
+            )
+
+            pL_new = (
+                pT*(1-pr[k])*pdL
+                + pT*pr[k]*puL
+                + pL_joint*pLL
+                + pU*puL
+            )
+
+            pU_new = p_ri-pT_new-pL_new
+
+            pT = pT_new
+            pL_joint = pL_new
+            pU = pU_new
+
+        p_ri_rij = pT*pr[i+j]
+        p_rij = pd[i+j]*pr[i+j]
+
+        E_bibi_j = M*p_ri_rij + M*(M-1)*p_ri*p_rij
+
+        E_bi = M*p_ri
+        E_bij = M*p_rij
+
+        var_bi = M*p_ri*(1-p_ri)
+        var_bij = M*p_rij*(1-p_rij)
+
+        cov_bibi_j = E_bibi_j-E_bi*E_bij
+
+        rho[m] = cov_bibi_j/np.sqrt(var_bi*var_bij)
+
+    rho_all[rate_name]['decreasing'] = rho
+
+# Plot
+
+fig,ax = plt.subplots(figsize=(9,6))
+
+fs=15
+lw=3
+
+colors = {
+    'kDL': 'tab:blue',
+    'kLD': 'tab:orange',
+    'kLU': 'tab:green',
+    'kUL': 'tab:red'
+}
+
+for rate_name in rate_names:
+
+    ax.plot(
+        j_values,
+        rho_all[rate_name]['increasing'],
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Increasing',
+        color=colors[rate_name],
+        marker='o',markersize=5,linewidth=lw
+    )
+
+    ax.plot(
+        j_values,
+        rho_all[rate_name]['decreasing'],
+        label=fr'$k_{{{rate_name[1:]}}}(i)$ Decreasing',
+        color=colors[rate_name],
+        marker='s',markersize=5,linewidth=lw,
+        linestyle='--'
+    )
+
+ax.set_xlabel(r'$j$',fontsize=fs)
+ax.set_ylabel(r'$\rho(b_i,b_{i+j})$',fontsize=fs)
+ax.tick_params(axis='both',labelsize=fs)
+
+ax.legend(
+    fontsize=12,
+    ncol=4,
+    loc='lower center',
+    bbox_to_anchor=(0.5,1.02)
+)
+
+plt.subplots_adjust(top=0.80)
+plt.show()
 
 #%% prinf sweep
 
@@ -875,7 +5474,7 @@ fig,ax = plt.subplots(1,2,figsize=(8,5))
 for prinf in prinf_values:
 
     # Hill function for release probability
-    pr = pr0 + (prinf - pr0) / (1 + (i_values / thr)**H)
+    pr = prinf + (pr0 - prinf) / (1 + (i_values / thr)**H)
 
     pL = np.zeros(naps)
     pd = np.zeros(naps)
@@ -1007,7 +5606,7 @@ for npools in pool_counts:
         xmin,xmax,thr,H = pr_params[j]
         kUL,kLU,kLD,kDL = rate_params[j]
 
-        pr = xmin + (xmax - xmin) / (1 + (i_values / thr)**H)
+        pr = xmax + (xmin - xmax) / (1 + (i_values / thr)**H)
 
         pUU,pUL,pUD,pLU,pLL,pLD,pDU,pDL,pDD = get_transition_probs(
             T,kDL,kLD,kLU,kUL
@@ -1022,16 +5621,16 @@ for npools in pool_counts:
         for i in range(naps - 1):
 
             pd[i+1] = (
-                pd[i] * (1 - pr[i+1]) * (1 - pDU - pDL)
-                + pd[i] * pr[i+1] * pUD
+                pd[i] * (1 - pr[i]) * (1 - pDU - pDL)
+                + pd[i] * pr[i] * pUD
                 + pu[i] * pUD
                 + pL[i] * pLD
             )
 
             pL[i+1] = (
                 pL[i] * (1 - pLU - pLD)
-                + pd[i] * (1 - pr[i+1]) * pDL
-                + pd[i] * pr[i+1] * pUL
+                + pd[i] * (1 - pr[i]) * pDL
+                + pd[i] * pr[i] * pUL
                 + pu[i] * pUL
             )
 
@@ -1150,7 +5749,7 @@ for npools in pool_counts:
         xmin,xmax,thr,H = pr_params[j]
         kUL,kLU,kLD,kDL = rate_params[j]
 
-        pr = xmin + (xmax - xmin) / (1 + (i_values / thr)**H)
+        pr = xmax + (xmin - xmax) / (1 + (i_values / thr)**H)
 
         pUU,pUL,pUD,pLU,pLL,pLD,pDU,pDL,pDD = get_transition_probs(
             T,kDL,kLD,kLU,kUL
@@ -1289,7 +5888,7 @@ def get_mean_qc(pr_params,rate_params):
     pr0,prinf,thr,H = pr_params
     kUL,kLU,kLD,kDL = rate_params
 
-    pr = pr0 + (prinf-pr0)/(1+(i_values/thr)**H)
+    pr = prinf + (pr0-prinf)/(1+(i_values/thr)**H)
 
     pUU,pUL,pUD,pLU,pLL,pLD,pDU,pDL,pDD = get_transition_probs(
         T,kUL,kLU,kLD,kDL
@@ -1495,5 +6094,41 @@ ax.set_ylabel('Fano factor')
 ax.legend()
 ax.grid(True)
 
+plt.tight_layout()
+plt.show()
+
+#%% Multiple pool FF as a function of M1 and M2
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Fixed parameters
+pr1 = 0.2
+pT1 = 0.5
+
+pr2 = 0.1
+pT2 = 0.8
+
+q1 = pr1 * pT1
+q2 = pr2 * pT2
+
+M1_values = np.arange(1,101)
+M2_values = np.arange(1,101)
+
+M1, M2 = np.meshgrid(M1_values, M2_values)
+
+FF = 1 - (M1*q1**2 + M2*q2**2) / (M1*q1 + M2*q2)
+
+plt.figure(figsize=(7,6))
+plt.imshow(
+    FF,
+    origin='lower',
+    extent=[M1_values[0], M1_values[-1], M2_values[0], M2_values[-1]],
+    aspect='auto',
+    cmap='nipy_spectral'
+)
+plt.colorbar(label=r'$FF_i$')
+plt.xlabel(r'$M_1$')
+plt.ylabel(r'$M_2$')
 plt.tight_layout()
 plt.show()
