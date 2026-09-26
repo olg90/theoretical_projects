@@ -774,14 +774,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
-kDL = 10
+kDL = 1
 kLD = 10
-kLU = 10
-kUL = 10
+kLU = 50
+kUL = 20
 
 pr0 = 0.1
 prinf = 1
-thr = 20
+thr = 4
 H = 2
 
 M = 100
@@ -790,12 +790,12 @@ T = 1 / f
 
 # Number of APs for each test
 naps_fixed_pr = 20
-naps_variable_pr = 40
-naps_variable_k = 100
+naps_variable_pr = 20
+naps_variable_k = 60
 
 # Manually chosen values
-pr_values = [0.1, 0.2, 0.4, 0.8]
-prinf_values = [0.1, 0.2, 0.4, 0.8]
+pr_values = [0.1, 0.2, 0.3, 0.4]
+prinf_values = [0.1, 0.2, 0.3, 0.4]
 
 # ============================================================
 # Function to calculate rho(n_D,n_L)
@@ -1074,7 +1074,8 @@ for rho,pr_value in zip(rho_fixed_pr,pr_values):
         range(1,naps_fixed_pr+1),
         rho,
         linewidth=lw,
-        label=fr'$p_r={pr_value}$'
+        label=fr'$p_r={pr_value}$',
+        marker='o'
     )
 
 ax[0].axhline(0,linewidth=1)
@@ -1270,6 +1271,346 @@ plt.show()
 # plt.tight_layout()
 # plt.show()
 # =============================================================================
+#%% Correlation coefficient between n_D and n_L - fixed pr+vary k
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.linalg import expm
+
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
+
+pr0 = 0.1
+prinf = 1
+thr = 4
+H = 2
+
+M = 100
+f = 100
+T = 1 / f
+
+# Number of APs for each test
+naps_fixed_pr = 20
+naps_variable_k = 60
+
+# Manually chosen values
+pr_values = [0.1, 0.2, 0.3, 0.4]
+
+# ============================================================
+# Function to calculate rho(n_D,n_L)
+# ============================================================
+
+def calculate_rho(pr,kDL_values,kLD_values,kLU_values,kUL_values,naps):
+
+    pu = np.zeros(naps)
+    pL = np.zeros(naps)
+    pd = np.zeros(naps)
+
+    # Initial steady state
+    denom = kDL*kLU + kDL*kUL + kLD*kUL
+
+    pu[0] = (kDL*kLU) / denom
+    pL[0] = (kDL*kUL) / denom
+    pd[0] = (kLD*kUL) / denom
+
+    for i in range(naps - 1):
+
+        Q = np.array([
+            [-kUL_values[i], kUL_values[i], 0],
+            [kLU_values[i], -(kLU_values[i] + kLD_values[i]), kLD_values[i]],
+            [0, kDL_values[i], -kDL_values[i]]
+        ])
+
+        P = expm(Q*T)
+
+        puL = P[0,1]
+        pud = P[0,2]
+
+        pLu = P[1,0]
+        pLd = P[1,2]
+
+        pdL = P[2,1]
+        pdd = P[2,2]
+
+        pd[i+1] = (
+            pd[i] * (1 - pr[i]) * pdd
+            + pd[i] * pr[i] * pud
+            + pu[i] * pud
+            + pL[i] * pLd
+        )
+
+        pL[i+1] = (
+            pL[i] * (1 - pLu - pLd)
+            + pd[i] * (1 - pr[i]) * pdL
+            + pd[i] * pr[i] * puL
+            + pu[i] * puL
+        )
+
+        pu[i+1] = 1 - pL[i+1] - pd[i+1]
+
+    # Multinomial covariance
+    cov_dL = -M * pd * pL
+
+    # Variances
+    var_d = M * pd * (1 - pd)
+    var_L = M * pL * (1 - pL)
+
+    # Pearson correlation coefficient
+    rho_dL = cov_dL / np.sqrt(var_d * var_L)
+
+    return rho_dL
+
+
+# ============================================================
+# Case 1: Fixed pr, different fixed pr values
+# ============================================================
+
+i_values = np.arange(naps_fixed_pr)
+
+kDL_values = np.full(naps_fixed_pr,kDL)
+kLD_values = np.full(naps_fixed_pr,kLD)
+kLU_values = np.full(naps_fixed_pr,kLU)
+kUL_values = np.full(naps_fixed_pr,kUL)
+
+rho_fixed_pr = []
+
+for pr_value in pr_values:
+
+    pr = np.full(naps_fixed_pr,pr_value)
+
+    rho = calculate_rho(
+        pr,
+        kDL_values,
+        kLD_values,
+        kLU_values,
+        kUL_values,
+        naps_fixed_pr
+    )
+
+    rho_fixed_pr.append(rho)
+
+
+# ============================================================
+# Case 3: Fixed pr, vary one k at a time
+# ============================================================
+
+i_values = np.arange(naps_variable_k)
+
+kDL_values = np.full(naps_variable_k,kDL)
+kLD_values = np.full(naps_variable_k,kLD)
+kLU_values = np.full(naps_variable_k,kLU)
+kUL_values = np.full(naps_variable_k,kUL)
+
+# kDL
+kDL_increasing = 100 + (kDL - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kDL_decreasing = 1 + (kDL - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kLD
+kLD_increasing = 100 + (kLD - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kLD_decreasing = 1 + (kLD - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kLU
+kLU_increasing = 100 + (kLU - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kLU_decreasing = 1 + (kLU - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# kUL
+kUL_increasing = 100 + (kUL - 100) / (
+    1 + (i_values / thr)**H
+)
+
+kUL_decreasing = 1 + (kUL - 1) / (
+    1 + (i_values / thr)**H
+)
+
+# Fixed pr
+pr_fixed = np.full(naps_variable_k,pr0)
+
+rho_k = []
+
+# kDL increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_increasing,
+    kLD_values,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kDL decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_decreasing,
+    kLD_values,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLD increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_increasing,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLD decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_decreasing,
+    kLU_values,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLU increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_increasing,
+    kUL_values,
+    naps_variable_k
+))
+
+# kLU decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_decreasing,
+    kUL_values,
+    naps_variable_k
+))
+
+# kUL increasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_values,
+    kUL_increasing,
+    naps_variable_k
+))
+
+# kUL decreasing
+rho_k.append(calculate_rho(
+    pr_fixed,
+    kDL_values,
+    kLD_values,
+    kLU_values,
+    kUL_decreasing,
+    naps_variable_k
+))
+
+
+# ============================================================
+# Plot
+# ============================================================
+
+fig,ax = plt.subplots(1,2,figsize=(13,5))
+
+fs = 15
+lw = 3
+
+# ------------------------------------------------------------
+# Fixed pr
+# ------------------------------------------------------------
+
+for rho,pr_value in zip(rho_fixed_pr,pr_values):
+
+    ax[0].plot(
+        range(1,naps_fixed_pr+1),
+        rho,
+        linewidth=lw,
+        label=fr'$p_r={pr_value}$',
+        marker='o'
+    )
+
+ax[0].axhline(0,linewidth=1)
+
+ax[0].set_title('Fixed $p_r$',fontsize=fs)
+ax[0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[0].set_ylabel(r'Correlation coefficient $\rho(n_D,n_L)$',fontsize=fs)
+ax[0].tick_params(axis='both',labelsize=fs)
+ax[0].legend(fontsize=10)
+
+
+# ------------------------------------------------------------
+# Variable k
+# ------------------------------------------------------------
+
+k_labels = [
+    r'$k_{DL}$',
+    r'$k_{LD}$',
+    r'$k_{LU}$',
+    r'$k_{UL}$'
+]
+
+k_pairs = [
+    (rho_k[0],rho_k[1]),
+    (rho_k[2],rho_k[3]),
+    (rho_k[4],rho_k[5]),
+    (rho_k[6],rho_k[7])
+]
+
+for label,(rho_increasing,rho_decreasing) in zip(k_labels,k_pairs):
+
+    line = ax[1].plot(
+        range(1,naps_variable_k+1),
+        rho_increasing,
+        linewidth=2.5,
+        linestyle='-',
+        marker='o',
+        markersize=5,
+        markevery=10,
+        label=label + ' increasing'
+    )[0]
+
+    ax[1].plot(
+        range(1,naps_variable_k+1),
+        rho_decreasing,
+        linewidth=2.5,
+        linestyle='--',
+        marker='s',
+        markersize=5,
+        markevery=10,
+        color=line.get_color(),
+        label=label + ' decreasing'
+    )
+
+ax[1].axhline(0,linewidth=1)
+
+ax[1].set_title('Fixed $p_r$, varying one $k$ at a time',fontsize=fs)
+ax[1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
+ax[1].set_ylabel(r'Correlation coefficient $\rho(n_D,n_L)$',fontsize=fs)
+ax[1].tick_params(axis='both',labelsize=fs)
+ax[1].legend(fontsize=9,ncol=2)
+
+plt.tight_layout()
+plt.show()
+
 #%% Correlation coefficient between n_D and n_L - comparison of p_r and kinetic-rate dynamics
 
 import numpy as np
@@ -1888,9 +2229,9 @@ kLU = 50
 kUL = 20
 
 M = 100
-f = 10
+f = 100
 T = 1 / f
-naps = 20
+naps = 15
 
 # steady state
 denom = kDL*kLU + kDL*kUL + kLD*kUL
@@ -1923,7 +2264,7 @@ pdL = P[2,1]
 pdd = P[2,2]
 
 # Constant pr sweep
-pr_values = [0.1,0.13,0.16,0.2]
+pr_values = [0.1,0.2,0.3,0.4]
 
 mean_qc_constant = {}
 ff_constant = {}
@@ -2009,14 +2350,16 @@ fig,ax = plt.subplots(2,2,figsize=(9,7),sharex=True)
 
 fs=15
 mks=5
-lw=3
+lw=2
 
-for pr_value in pr_values:
+markers = ['o','x','s','D']
+
+for pr_value,marker in zip(pr_values,markers):
     ax[0,0].plot(
         range(1,naps+1),
         mean_qc_constant[pr_value],
         label=f'$p_r={pr_value}$',
-        marker='o', markersize=mks,linewidth=lw
+        marker=marker, markersize=mks,linewidth=lw
     )
 
 ax[0,0].set_ylabel('Mean QC',fontsize=fs)
@@ -2024,12 +2367,12 @@ ax[0,0].set_title('Constant $p_r$',fontsize=fs)
 ax[0,0].tick_params(axis='both',labelsize=fs)
 ax[0,0].legend(fontsize=fs)
 
-for pr_value in pr_values:
+for pr_value,marker in zip(pr_values,markers):
     ax[0,1].plot(
         range(1,naps+1),
         ff_constant[pr_value],
         label=f'$p_r={pr_value}$',
-        marker='o', markersize=mks,linewidth=lw
+        marker=marker, markersize=mks,linewidth=lw
     )
 
 ax[0,1].set_ylabel('Fano factor',fontsize=fs)
@@ -2037,12 +2380,12 @@ ax[0,1].set_title('Constant $p_r$',fontsize=fs)
 ax[0,1].tick_params(axis='both',labelsize=fs)
 ax[0,1].legend(fontsize=fs)
 
-for prinf in prinf_values:
+for prinf,marker in zip(prinf_values,markers):
     ax[1,0].plot(
         range(1,naps+1),
         mean_qc_hill[prinf],
         label=f'$p_{{r,\\infty}}={prinf}$',
-        marker='o', markersize=mks,linewidth=lw
+        marker=marker, markersize=mks,linewidth=lw
     )
 
 ax[1,0].set_xlabel('AP stimulus number, $i$',fontsize=fs)
@@ -2051,12 +2394,12 @@ ax[1,0].set_title('Hill $p_r$',fontsize=fs)
 ax[1,0].tick_params(axis='both',labelsize=fs)
 ax[1,0].legend(fontsize=fs)
 
-for prinf in prinf_values:
+for prinf,marker in zip(prinf_values,markers):
     ax[1,1].plot(
         range(1,naps+1),
         ff_hill[prinf],
         label=f'$p_{{r,\\infty}}={prinf}$',
-        marker='o', markersize=mks,linewidth=lw
+        marker=marker, markersize=mks,linewidth=lw
     )
 
 ax[1,1].set_xlabel('AP stimulus number, $i$',fontsize=fs)
@@ -3581,10 +3924,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
-kDL = 5
-kLD = 50
-kLU = 5
-kUL = 50
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
 
 M = 100
 f = 100
@@ -3605,11 +3948,10 @@ initial_states=[puss,pLss,pdss]
 # initial_states=[0,0,1]
 # =============================================================================
 
-
 i = 1
 j_max = 6
 
-pr_values = [0.1, 0.2, 0.5, 1]
+pr_values = [0.1, 0.2, 0.3, 0.4]
 
 def get_transition_matrix(T):
     Q = np.array([
@@ -3869,8 +4211,8 @@ fs=15
 plt.figure(figsize=(7,5))
 plt.plot(pr_values,rho_values,lw=5)
 
-plt.xlabel(r'$p_r$',fontsize=fs)
-plt.ylabel(r'Correlation coefficient, $\rho_{1,2}$',fontsize=fs)
+plt.xlabel('Fusion probability, $p_r$',fontsize=fs)
+plt.ylabel('Normalized correlation\ncoefficient of QC, $\\rho(1,2)$',fontsize=fs)
 plt.tick_params(axis='both',labelsize=fs)
 plt.tight_layout()
 plt.grid(True,alpha=0.3)
@@ -3882,10 +4224,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 
-kDL = 5
-kLD = 50
-kLU = 5
-kUL = 50
+kDL = 1
+kLD = 10
+kLU = 50
+kUL = 20
 
 M = 100
 f = 100
@@ -4024,186 +4366,14 @@ for rate_name,rate_variable in rates.items():
             values['kLU'],
             values['kUL']
         )
-#%% plotting optimal pr and rho(1,2)
+# =============================================================================
+# #%% plotting optimal pr and rho(1,2)
+# =============================================================================
 
 kfrangeDL = 1
 kfrangeLD = 4
-kfrangeLU = 2
-kfrangeUL = 3
-
-kf_ranges = {
-    'kDL': kfrangeDL,
-    'kLD': kfrangeLD,
-    'kLU': kfrangeLU,
-    'kUL': kfrangeUL
-}
-
-# Plot
-fs = 15
-
-fig,axs = plt.subplots(2,4,figsize=(20,9))
-
-for j,(rate_name,rate_variable) in enumerate(rates.items()):
-
-    x = rate_values/f
-    y = rho_min[rate_variable]
-
-    # Find all k/f values where rho_min = -0.2
-    target = -0.2
-
-    crossing_indices = np.where(
-        (y[:-1]-target)*(y[1:]-target) <= 0
-    )[0]
-
-    kf_crossings = []
-
-    for n in crossing_indices:
-
-        if y[n+1] == y[n]:
-            kf_cross = x[n]
-        else:
-            kf_cross = x[n] + (target-y[n])*(x[n+1]-x[n])/(y[n+1]-y[n])
-
-        kf_crossings.append(kf_cross)
-
-    print(rate_name + r': $k/f$ =', kf_crossings)
-
-
-    # Find regions where rho_min <= -0.2
-    boundaries = [x[0]] + kf_crossings + [x[-1]]
-
-    shaded_regions = []
-
-    for n in range(len(boundaries)-1):
-
-        x_left = boundaries[n]
-        x_right = boundaries[n+1]
-        x_mid = (x_left+x_right)/2
-
-        y_mid = np.interp(x_mid,x,y)
-
-        if y_mid <= target:
-            shaded_regions.append((x_left,x_right))
-
-
-    # p_r* plot
-    axs[0,j].plot(
-        x,
-        pr_star[rate_variable],
-        lw=5
-    )
-
-    for x_left,x_right in shaded_regions:
-        axs[0,j].axvspan(
-            x_left,
-            x_right,
-            color='pink',
-            alpha=0.3
-        )
-
-    for kf_cross in kf_crossings:
-        axs[0,j].axvline(
-            kf_cross,
-            lw=2,
-            linestyle='--',
-            color='k'
-        )
-
-    axs[0,j].set_xlim(
-        0,
-        kf_ranges[rate_variable]
-    )
-
-    axs[0,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    if j==0:
-        axs[0,j].set_ylabel(
-            'Minizing fusion probability of\nnormalized correlation coefficient, $p_r^*$',
-            fontsize=fs
-        )
-        
-# 'Minizing fusion probability of the\nnormalized correlation coefficient'
-
-    axs[0,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[0,j].grid(True,alpha=0.3)
-
-
-    # minimum rho plot
-    axs[1,j].plot(
-        x,
-        y,
-        lw=5
-    )
-
-    for x_left,x_right in shaded_regions:
-        axs[1,j].axvspan(
-            x_left,
-            x_right,
-            color='pink',
-            alpha=0.3
-        )
-
-    axs[1,j].axhline(
-        target,
-        lw=2,
-        linestyle='--',
-        color='k'
-    )
-
-    for kf_cross in kf_crossings:
-        axs[1,j].axvline(
-            kf_cross,
-            lw=2,
-            linestyle='--',
-            color='k'
-        )
-
-    axs[1,j].set_xlim(
-        0,
-        kf_ranges[rate_variable]
-    )
-
-    axs[1,j].set_xlabel(
-        rate_name + r' / $f$',
-        fontsize=fs
-    )
-
-    if j==0:
-        axs[1,j].set_ylabel(
-            'Minimum normalized correl-\nation coefficient of QC, $\\rho(1,2)$',
-            fontsize=fs
-        )
-# =============================================================================
-#     if j==0:
-#         axs[1,j].set_ylabel(
-#             r'$\rho_{\min}(1,2)$',
-#             fontsize=fs
-#         )
-# =============================================================================
-
-    axs[1,j].tick_params(
-        axis='both',
-        labelsize=fs
-    )
-
-    axs[1,j].grid(True,alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-#%% plotting optimal pr and rho(1,2)
-
-kfrangeDL = 1
-kfrangeLD = 4
-kfrangeLU = 2
-kfrangeUL = 3
+kfrangeLU = 1
+kfrangeUL = 2
 
 kf_ranges = {
     'kDL': kfrangeDL,
@@ -4216,15 +4386,21 @@ rate_labels = {
     'kDL': r'Normalized untightening rate, $k_{TL}/f$',
     'kLD': r'Normalized tightening rate, $k_{LT}/f$',
     'kLU': r'Normalized unloosening rate, $k_{LU}/f$',
-    'kUL': r'Normalized loosening rate, $k_{UL}/f$'
+    'kUL': r'Normalized loose docking rate, $k_{UL}/f$'
 }
 
+rate_order = ['kUL','kLU','kLD','kDL']
+
+
+#%%
 # Plot
 fs = 15
 
 fig,axs = plt.subplots(2,4,figsize=(20,9))
 
-for j,(rate_name,rate_variable) in enumerate(rates.items()):
+for j,rate_variable in enumerate(rate_order):
+
+    rate_name = rate_labels[rate_variable]
 
     x = rate_values/f
     y = rho_min[rate_variable]
@@ -4247,7 +4423,7 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
 
         kf_crossings.append(kf_cross)
 
-    print(rate_name + r': $k/f$ =', kf_crossings)
+    print(rate_variable + r': $k/f$ =', kf_crossings)
 
 
     # Find regions where rho_min <= -0.2
@@ -4279,7 +4455,7 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
             x_left,
             x_right,
             color='pink',
-            alpha=0.3
+            alpha=0.4
         )
 
     for kf_cross in kf_crossings:
@@ -4296,13 +4472,13 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
     )
 
     axs[0,j].set_xlabel(
-        rate_labels[rate_variable],
+        rate_name,
         fontsize=fs
     )
 
     if j==0:
         axs[0,j].set_ylabel(
-            'Minizing fusion probability of\nnormalized correlation coefficient, $p_r^*$',
+            'Minizing fusion probability of the\nnormalized correlation coefficient, $p_r^*$',
             fontsize=fs
         )
 
@@ -4321,12 +4497,31 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
         lw=5
     )
 
+    axs[1,j].set_xlim(
+        0,
+        kf_ranges[rate_variable]
+    )
+
+    # Set lower y-limit before shading
+    y_bottom = min(y.min(),target)
+
+    axs[1,j].set_ylim(
+        y_bottom-0.005,
+        axs[1,j].get_ylim()[1]
+    )
+
+    # Shade entire region from rho = -0.2 to bottom of plot
     for x_left,x_right in shaded_regions:
-        axs[1,j].axvspan(
-            x_left,
-            x_right,
+
+        mask = (x >= x_left) & (x <= x_right)
+
+        axs[1,j].fill_between(
+            x,
+            y_bottom-0.005,
+            target,
+            where=mask,
             color='pink',
-            alpha=0.3
+            alpha=0.4
         )
 
     axs[1,j].axhline(
@@ -4344,13 +4539,8 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
             color='k'
         )
 
-    axs[1,j].set_xlim(
-        0,
-        kf_ranges[rate_variable]
-    )
-
     axs[1,j].set_xlabel(
-        rate_labels[rate_variable],
+        rate_name,
         fontsize=fs
     )
 
@@ -4369,7 +4559,6 @@ for j,(rate_name,rate_variable) in enumerate(rates.items()):
 
 plt.tight_layout()
 plt.show()
-
 
 #%% Pearson correlation coefficient - kinetic rate sweeps
 
